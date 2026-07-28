@@ -34,20 +34,20 @@ Necesitas:
 1. Elegi donde va a vivir la app (por ejemplo, el Escritorio o `C:\`).
 2. Abri esa carpeta, hace **click derecho** en un espacio vacio y elegi
    **"Abrir en Terminal"** (o "Git Bash Here").
-3. Pega el comando que te paso el asistente (es del estilo):
+3. Pega este comando (es la direccion de TU repositorio):
 
 ```bash
-git clone https://github.com/javipere-git/bot-trading.git
+git clone https://github.com/javipere-git/bot.git
 ```
 
 4. La primera vez te va a pedir iniciar sesion en GitHub: usa tu usuario y
    contraseña de GitHub (se abre una ventana del navegador).
 
-Eso crea la carpeta `bot-trading` con toda la app adentro.
+Eso crea la carpeta `bot` con toda la app adentro.
 
 ## Paso 4 — Instalar las librerias
 
-Dentro de la carpeta `bot-trading`, hace doble click en **`Actualizar.bat`**.
+Dentro de la carpeta `bot`, hace doble click en **`Actualizar.bat`**.
 Se encarga solo de instalar todo lo que hace falta.
 
 ## Paso 5 — Poner tus claves
@@ -65,9 +65,14 @@ Se encarga solo de instalar todo lo que hace falta.
 
 Para que los problemas de ESTA PC se puedan revisar desde la PC principal:
 
-1. Instala **Google Drive para escritorio** e inicia sesion con tu cuenta.
-2. Crea (o ubica) una carpeta sincronizada, por ejemplo `Mi unidad\bot-logs`.
-3. Abri `config\credentials.ini` con el Bloc de notas y completa la ultima linea:
+1. Instala **Google Drive para escritorio** (google.com/drive/download) e inicia
+   sesion. OJO: NO alcanza con usar Drive desde el navegador; hace falta el
+   programa, que es el que crea una carpeta de verdad en la PC (aparece como una
+   unidad nueva, normalmente `G:`, con "Mi unidad" adentro).
+2. Crea (o ubica) ahi la carpeta de los registros, por ejemplo `Mi unidad\bot-logs`.
+3. Para saber la ruta exacta: click derecho sobre la carpeta -> "Copiar como ruta
+   de acceso".
+4. Abri `config\credentials.ini` con el Bloc de notas y completa la ultima linea:
 
 ```
 [logs]
