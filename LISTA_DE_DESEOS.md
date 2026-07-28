@@ -1,0 +1,40 @@
+# Lista de deseos (features para mas adelante)
+
+> Ideas que NO construimos ahora, pero que anotamos para disenar teniendolas en
+> cuenta y no olvidarlas. Agrega lo que se te ocurra; ya las afinamos cuando toque.
+
+- **Hotkeys / atajos de teclado** para la operacion manual (entrar, salir, cancelar, etc.).
+- **Tooltips de ayuda en los campos:** al dejar el mouse quieto unos segundos sobre un campo, mostrar un cartelito con una breve explicacion; desaparece al mover el mouse. (En Qt es sencillo: cada widget tiene setToolTip; falta escribir los textos de ayuda.)
+- **Tablas del monitoreo - horario y orden:** [HECHO] columna Hora (hh:mm:ss local) en Ordenes abiertas (envio), Ejecutadas (ejecucion) y Canceladas (cancelacion); ordenables por cualquier columna con click en el encabezado (por defecto por hora, mas reciente arriba; orden numerico correcto en cantidades/precios).
+- **P/L del dia completo (realizado + no realizado):** [HECHO 21/07/2026] lo informa el
+  broker (Tradier: close_pl+open_pl de /balances; Alpaca: equity-last_equity). Se muestra
+  arriba del monitoreo, en grande, con desglose "cerrado hoy | abierto". Interfaz comun:
+  `Broker.get_day_pnl() -> DayPnL | None`.
+- **Tablas del monitoreo - columnas customizables:** poder elegir que columnas mostrar/ocultar y su orden.
+- **Encabezado - cuenta y broker:** mostrar en el banner (a la derecha de "DINERO REAL" / "SIN DINERO REAL") el numero de cuenta ENMASCARADO (****
+  + ultimos 4 caracteres, ej. ****1055) y el nombre del broker (ej. "Tradier"), pensando en el futuro multi-broker.
+- **Empaquetar como .exe (PyInstaller):** un ejecutable de verdad, sin depender de Python instalado (la app de Marian lo hacia asi; su codigo tiene la referencia `app_dir()` para rutas junto al .exe).
+- **Ladder - boton "Cancelar todas las ordenes"**: [HECHO] boton "Cancelar todo" al lado del zoom, cancela TODAS las ordenes abiertas de la cuenta.
+- **Cancelar orden desde la lista de Ordenes abiertas** (monitoreo): click derecho sobre una orden -> cancelar (o "cancelar seleccionada" / "cancelar todas"). Complementa el boton "Cancelar todo" del ladder.
+- **Ladder - marcador de orden mas claro:** que la celda de la orden propia parezca mas un boton de cancelar (hoy muestra "{cant} [X]"; idealmente un boton X real con setCellWidget, cuidando de no romper el arrastre).
+- **Salida parcial (scale-out):** si no se logra salir con la posicion completa, intentar con una fraccion (ej. la mitad). Ejemplo: largo 50, intento salir 50 en varios escalones; si no, pruebo con 25, y si cierran esos 25, intento de nuevo con los otros 25.
+- **Filtro por volumen:** [HECHO] campos "Volumen dia" min/max en el panel de Entrada.
+  Filtra por el volumen TOTAL operado en el dia (acumulado hasta ese momento, campo
+  `volume` del quote de Tradier). Fuera del rango -> saltea el simbolo. Vacio = sin limite.
+- **Filtro por rango de precio** (entrar solo en simbolos dentro de un rango de precio).
+- **Cargar el ladder tambien cuando el bot FRENA por errores:** hoy el simbolo se carga
+  solo en el ladder cuando el bot pasa a manual (guardia disparado / los niveles no
+  cerraron). Falta el tercer caso: cuando frena por errores del broker (3 strikes o sin
+  conexion, outcome ABORTED) y queda una posicion abierta. Seria agregar
+  `self._avisar_manual(sym)` en la rama ABORTED de `_announce` (engine.py), cuidando de
+  avisar solo si de verdad hay posicion abierta (ABORTED tambien puede pasar sin posicion).
+- **Analisis mas fino del movimiento en contra** (velocidad de caida / momentum) en vez de solo umbral fijo, para el guardia de seguridad.
+- **Importar watchlist desde archivos y portapapeles** (Excel .xlsx, CSV, .txt, y pegar desde el portapapeles). La separacion de simbolos (coma, ;, tab, espacio, salto de linea, y el `$` de `$SPY`) ya esta resuelta en el lector; falta la parte de leer archivos y portapapeles, que es de la interfaz (Fase 5).
+- **Fase 6 - Robustez en vivo (ANTES de operar con dinero real):**
+  - [HECHO] Contador de strikes: si una orden es rechazada/falla `max_strikes` (3) veces SEGUIDAS, el bot se detiene solo (ABORTED), deja la posicion como esta y avisa. La capa `_safe_order`/`_safe_read` del motor evita que la app se caiga ante errores del broker; si se pierde la conexion (muchas lecturas fallidas seguidas) tambien frena. Sonido del sistema al frenar/pasar a manual (beep en las alertas "***"). Todo en `engine.py` + `gui/control_panel.py`.
+  - FALTA (refinamientos): un rechazo de un simbolo puntual (bloqueado / no shorteable) que SALTEE ese simbolo en vez de sumar strike; deteccion de cotizaciones "pisadas"/viejas (por antiguedad del timestamp); recuperar/avisar una posicion abierta al reabrir la app tras un cierre inesperado; ordenes "fantasma" (cancelar y llenarse al mismo tiempo); sonido con un .wav propio en vez del beep del sistema.
+- **Time & Sales (la "cinta" de trades ejecutados):** panel con hora/precio/tamano de cada operacion. Se obtiene del streaming de Tradier (evento "timesale", requiere token de produccion). Sumarlo cuando montemos el streaming (Fase 4). Cuidado con el volumen de mensajes: limitar a las ultimas N filas, actualizar en lote y procesar en hilo aparte. La app de Marian ya lo tenia.
+- **Aviso sonoro al pasar a manual:** ademas del cartel/notificacion, un ruido cuando el bot pasa a manual (sea por el guardia o porque no pudo cerrar con los 4 niveles). Necesita la pantalla (Fase 5).
+- **Odd lots dentro del spread (PENDIENTE, tomar con pinzas):** el NBBO (1er nivel) lo fijan los lotes de 100+ acciones, pero dentro del spread puede haber bids/asks chicos (odd lots) que no marcan el NBBO. Ej.: NBBO 100.00 x 100.20 pero un odd lot de 80 acciones en 100.07 -> quizas no convenga postear 50 acciones debajo de 100.07. Muchos brokers no los muestran. CONFIRMADO: Tradier es Level 1 y NO envia odd lots (no aparecen en el stream ni en el REST); no se pueden mostrar con su API. Requeriria un feed Level 2 / de profundidad de otro proveedor.
+
+_(Esta lista es viva: se va completando.)_

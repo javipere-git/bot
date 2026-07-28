@@ -1,0 +1,11 @@
+# Dependencias del proyecto. Se instalan por fase (ver README.md).
+# La Fase 1 (conector de mentira) NO necesita ninguna de estas.
+
+# Fase 2+ : conexion a Tradier por REST
+requests
+
+# Fase 4+ : streaming de precios y ejecuciones
+websocket-client
+
+# Fase 5  : interfaz grafica
+PySide6

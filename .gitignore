@@ -1,0 +1,19 @@
+# Credenciales: NUNCA subir tokens
+config/credentials.ini
+*.env
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Logs (incluidos los rotados: registro_....log.1, .log.2, ...)
+*.log
+*.log.*
+registro_*
+logs/
+
+# Codigo de referencia de Marian (propiedad de el; solo referencia visual)
+referencia_marian/
