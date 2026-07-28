@@ -261,13 +261,34 @@ forma de verlos con la API de Tradier.
 
 ---
 
-## 4b. Archivo de registro (registro_app.log)
+## 4b. Archivo de registro
 
-Todo lo que aparece en el Registro de la pantalla queda tambien en el archivo
-`registro_app.log` (carpeta del proyecto), con fecha y hora. Si la app se cierra
-sola, el error completo queda escrito ahi: **ese archivo es lo primero a mirar**
-(y pasarselo al asistente) despues de un cierre inesperado. Rota solo (~2 MB por
-archivo, guarda los 3 anteriores), no hay que limpiarlo.
+Todo lo que aparece en el Registro de la pantalla queda tambien en un archivo, con
+fecha y hora. Si la app se cierra sola, el error completo queda escrito ahi: **ese
+archivo es lo primero a mirar** (y pasarselo al asistente) despues de un cierre
+inesperado. Rota solo (~2 MB por archivo, guarda los 3 anteriores).
+
+**Nombre del archivo**: `registro_<NOMBRE-DE-LA-PC>_<perfil>.log`
+(ej. `registro_CASA-PC_tradier_live.log`). Lleva el nombre de la maquina para que,
+si varias PCs escriben en una carpeta compartida, los registros no se pisen y se
+sepa de cual vino cada uno.
+
+**Donde se guarda**: por defecto, en la carpeta del proyecto. Se puede mandar a una
+carpeta sincronizada (Google Drive, OneDrive...) para revisarla desde otra PC,
+poniendo la ruta en `config/credentials.ini`:
+
+```
+[logs]
+carpeta = C:\Users\Casa\Mi unidad\bot-logs
+```
+
+Si esa carpeta no esta disponible, el registro cae solo a la carpeta del proyecto
+(nunca deja de registrar por eso).
+
+**Version del codigo**: al abrir, la app anota en el registro la PC y la version que
+esta corriendo (ej. `PC: CASA-PC | version del codigo: main c6f1c1b`). Sirve para
+saber, mirando un registro de otra maquina, si tenia las ultimas correcciones o una
+version vieja.
 
 ---
 

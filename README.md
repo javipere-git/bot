@@ -1,21 +1,39 @@
-# Bot de trading + Ladder (Tradier)
+# Bot de trading + Ladder (multi-broker)
 
-Aplicacion de escritorio de trading para Tradier, pensada para ser multi-broker.
-Briefing completo en `CONTEXTO_proyecto.md`. Decisiones acordadas en `DECISIONES.md`.
-Manual de uso + condiciones de la API de Tradier en `MANUAL.md`.
+Aplicacion de escritorio de trading, multi-broker desde el diseño.
+**Brokers cableados: Tradier y Alpaca** (mas el conector "hibrido", que opera en un
+broker tomando los precios del otro).
+
+| Documento | Para que |
+|---|---|
+| `MANUAL.md` | Manual de uso + condiciones de las APIs + bugs aprendidos |
+| `INSTALAR_EN_OTRA_PC.md` | Poner la app a andar en otra computadora |
+| `DECISIONES.md` | Por que se eligio cada cosa |
+| `PENDIENTES.md` / `LISTA_DE_DESEOS.md` | Que falta / ideas futuras |
+| `CONTEXTO_proyecto.md` | Briefing original del proyecto |
 
 ## Regla de oro
-Todo el desarrollo se hace en **paper / sandbox (dinero simulado)**. El modo LIVE
-(dinero real) existe pero queda deshabilitado hasta que el usuario pega su numero de
-cuenta real en `config/credentials.ini`, y tiene salvaguardas: no-doble-posicion,
-tope de tamano (`live_max_shares`), y doble confirmacion (escribir REAL + cartel al
-iniciar). PAPER es siempre el modo por defecto.
+El desarrollo y las pruebas se hacen en **paper / sandbox (dinero simulado)**. Los
+modos LIVE (dinero real) existen pero quedan **deshabilitados** hasta que el usuario
+pega sus credenciales reales en `config/credentials.ini`, y tienen salvaguardas:
+no-doble-posicion, tope de tamano (`live_max_shares`), doble confirmacion (escribir
+REAL + cartel al iniciar) y aviso previo si la cuenta no permite operar en corto.
+PAPER es siempre lo que aparece primero.
 
 ## Estructura
-- `tradingbot/core/` — el "cerebro": modelos de datos (`models.py`) y la interfaz comun (`broker.py`).
-- `tradingbot/connectors/` — los "conectores": traductores a cada broker. Por ahora `fake_broker.py` (simulado). Mas adelante, Tradier.
-- `examples/` — demos para probar por consola.
-- `config/` — plantilla de credenciales (los tokens reales no se suben al repo).
+- `tradingbot/core/` — el "cerebro": motor (`engine.py`), modelos (`models.py`),
+  configuracion (`config.py`) y la interfaz comun de brokers (`broker.py`).
+- `tradingbot/connectors/` — los "traductores" a cada broker: `tradier.py`,
+  `alpaca.py`, `hibrido.py`, `fake_broker.py` (simulado, para los tests) y los
+  streamings (`*_stream.py`).
+- `tradingbot/gui/` — la pantalla (PySide6): control, monitoreo, ladder, perfiles.
+- `examples/` — demos y pruebas de integracion para correr por consola.
+- `config/` — plantilla de credenciales (los tokens reales NO se suben al repo).
+
+## Que NO esta en el repo (a proposito)
+- `config/credentials.ini` — tus tokens. Es propio de cada maquina.
+- `registro_*.log` — los registros de actividad.
+- `referencia_marian/` — codigo de referencia visual, propiedad de su autor.
 
 ## Estado actual
 - [x] Fase 0: estructura del proyecto.
