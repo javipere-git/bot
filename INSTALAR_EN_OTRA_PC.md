@@ -20,9 +20,20 @@ Necesitas:
 ## Paso 1 — Instalar Python
 
 1. Entra a **python.org/downloads** y baja la ultima version para Windows.
-2. Al instalar, **TILDA la casilla "Add Python to PATH"** (abajo de todo, en la
-   primera pantalla). Es el paso que mas se olvida y sin eso no funciona nada.
+2. El instalador de Windows cambio hace poco. Segun cual te toque:
+   - **Instalador nuevo ("Python Install Manager")**: NO tiene la casilla "Add to
+     PATH" -> configura el PATH solo, no hay nada que tildar. Si aparece un cartel
+     de consola preguntando por "long paths" (rutas de mas de 260 caracteres),
+     responde **`y`** y Enter (acepta el permiso de administrador; puede pedir
+     reiniciar). Ayuda a que PySide6, que es grande, instale sin problemas.
+   - **Instalador clasico (`.exe`)**: en la primera pantalla, **TILDA la casilla
+     "Add Python to PATH"** (abajo de todo) antes de "Install Now".
 3. Siguiente / siguiente / finalizar.
+4. **Verifica** que quedo bien: abri una consola (tecla Windows -> escribi `cmd` ->
+   Enter) y escribi `python --version`. Tiene que responder con un numero de
+   version (ej. `Python 3.13.1`). Si en cambio se abre la Microsoft Store o dice
+   que no reconoce el comando, desinstala y usa el **instalador clasico** (en
+   python.org, link "Windows installer (64-bit)").
 
 ## Paso 2 — Instalar Git
 
