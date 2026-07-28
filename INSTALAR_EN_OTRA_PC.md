@@ -65,19 +65,26 @@ Se encarga solo de instalar todo lo que hace falta.
 
 Para que los problemas de ESTA PC se puedan revisar desde la PC principal:
 
-1. Instala **Google Drive para escritorio** (google.com/drive/download) e inicia
-   sesion. OJO: NO alcanza con usar Drive desde el navegador; hace falta el
-   programa, que es el que crea una carpeta de verdad en la PC (aparece como una
-   unidad nueva, normalmente `G:`, con "Mi unidad" adentro).
+**Usa la cuenta de Google DEDICADA al bot** (no la personal). Asi, lo unico que
+queda accesible desde esa unidad son los archivos del bot.
 
-2. La carpeta de registros tiene que estar **DENTRO de "Mi unidad"**, o sea
-   `G:\Mi unidad\bot-logs`. Es el punto mas facil de errar:
+1. Instala **Google Drive para escritorio** (google.com/drive/download) e inicia
+   sesion **con la cuenta dedicada**. OJO: NO alcanza con usar Drive desde el
+   navegador; hace falta el programa, que es el que crea una carpeta de verdad en
+   la PC (aparece como una unidad nueva, normalmente `G:`, con "Mi unidad" adentro).
+
+2. La carpeta tiene que estar **DENTRO de "Mi unidad"**. Es el punto mas facil de
+   errar:
 
    | Donde la pongas | Que pasa |
    |---|---|
-   | `G:\Mi unidad\bot-logs` | CORRECTO: se sincroniza en las DOS direcciones, las dos PCs ven los mismos archivos |
+   | `G:\Mi unidad\bot-intercambio\bot-logs` | CORRECTO: se sincroniza en las DOS direcciones, las dos PCs ven los mismos archivos |
    | Una carpeta comun del disco C: | NO se sincroniza: los registros no salen de esa PC |
    | Una carpeta "espejada" de la PC (opcion "Carpetas de tu computadora" de Drive) | NO sirve: sube a Drive pero NO baja a las otras computadoras |
+
+   La estructura es:
+   - `bot-intercambio\` — buzon general (capturas, watchlists, lo que haga falta)
+   - `bot-intercambio\bot-logs\` — los registros
 
 3. Para saber la ruta exacta: click derecho sobre la carpeta -> "Copiar como ruta
    de acceso".
@@ -85,7 +92,7 @@ Para que los problemas de ESTA PC se puedan revisar desde la PC principal:
 
 ```
 [logs]
-carpeta = C:\Users\TU-USUARIO\Mi unidad\bot-logs
+carpeta = G:\Mi unidad\bot-intercambio\bot-logs
 ```
 
 Los registros se llaman `registro_<NOMBRE-DE-ESTA-PC>_<perfil>.log`, asi que los
