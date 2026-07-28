@@ -69,7 +69,16 @@ Para que los problemas de ESTA PC se puedan revisar desde la PC principal:
    sesion. OJO: NO alcanza con usar Drive desde el navegador; hace falta el
    programa, que es el que crea una carpeta de verdad en la PC (aparece como una
    unidad nueva, normalmente `G:`, con "Mi unidad" adentro).
-2. Crea (o ubica) ahi la carpeta de los registros, por ejemplo `Mi unidad\bot-logs`.
+
+2. La carpeta de registros tiene que estar **DENTRO de "Mi unidad"**, o sea
+   `G:\Mi unidad\bot-logs`. Es el punto mas facil de errar:
+
+   | Donde la pongas | Que pasa |
+   |---|---|
+   | `G:\Mi unidad\bot-logs` | CORRECTO: se sincroniza en las DOS direcciones, las dos PCs ven los mismos archivos |
+   | Una carpeta comun del disco C: | NO se sincroniza: los registros no salen de esa PC |
+   | Una carpeta "espejada" de la PC (opcion "Carpetas de tu computadora" de Drive) | NO sirve: sube a Drive pero NO baja a las otras computadoras |
+
 3. Para saber la ruta exacta: click derecho sobre la carpeta -> "Copiar como ruta
    de acceso".
 4. Abri `config\credentials.ini` con el Bloc de notas y completa la ultima linea:

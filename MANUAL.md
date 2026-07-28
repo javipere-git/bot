@@ -274,8 +274,11 @@ si varias PCs escriben en una carpeta compartida, los registros no se pisen y se
 sepa de cual vino cada uno.
 
 **Donde se guarda**: por defecto, en la carpeta del proyecto. Se puede mandar a una
-carpeta sincronizada (Google Drive, OneDrive...) para revisarla desde otra PC,
-poniendo la ruta en `config/credentials.ini`:
+carpeta sincronizada para revisarla desde otra PC, poniendo la ruta en
+`config/credentials.ini`. Con Google Drive tiene que ser una carpeta **dentro de
+"Mi unidad"** (la unidad `G:` que crea Drive para escritorio): una carpeta comun del
+disco `C:` no se sincroniza, y las carpetas "espejadas" de la PC suben a Drive pero
+NO bajan a las otras computadoras.
 
 ```
 [logs]
