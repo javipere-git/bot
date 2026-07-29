@@ -26,6 +26,7 @@ from typing import Any, Callable
 import requests
 
 from ..core.broker import Broker
+from ..core.horarios import es_sesion_overnight
 from .alpaca_trade_stream import AlpacaTradeStream
 from ..core.models import (
     DayPnL,
@@ -417,10 +418,21 @@ class AlpacaBroker(Broker):
             raise ValueError(f"No encontre la orden {order_id}")
         return self._parse_order(data)
 
+    def feed_actual(self) -> str:
+        """Que feed de datos corresponde AHORA.
+
+        En la sesion overnight (20:00-04:00 ET) el consolidado (SIP) no publica
+        nada: hay que pedir el feed de Blue Ocean ('boats'). En el resto del dia,
+        el feed configurado (sip o iex)."""
+        if self._feed != "iex" and es_sesion_overnight():
+            return "boats"
+        return self._feed
+
     def get_quote(self, symbol: str) -> Quote:
         # el snapshot trae la cotizacion Y el volumen del dia en una sola llamada
         data = self._get(
-            f"/v2/stocks/{symbol}/snapshot", params={"feed": self._feed}, base=DATA_BASE
+            f"/v2/stocks/{symbol}/snapshot",
+            params={"feed": self.feed_actual()}, base=DATA_BASE,
         )
         lq = (data or {}).get("latestQuote") or {}
         db = (data or {}).get("dailyBar") or {}

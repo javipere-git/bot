@@ -55,6 +55,7 @@ class TapePanel(QWidget):
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
+        self.setMinimumWidth(150)
         self._symbol = ""
         self._nbbo = None            # (bid, ask) para saber quien fue el agresivo
         self._pendientes = deque()   # operaciones sin volcar todavia
@@ -72,6 +73,8 @@ class TapePanel(QWidget):
         self.tabla.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.tabla.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.tabla.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.tabla.horizontalHeader().setMinimumSectionSize(24)
+        self.tabla.setMinimumWidth(0)
         self.tabla.setStyleSheet("font-size: 11px;")
         self.tabla.verticalHeader().setDefaultSectionSize(18)
         lay.addWidget(self.tabla, 1)

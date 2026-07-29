@@ -9,3 +9,7 @@ websocket-client
 
 # Fase 5  : interfaz grafica
 PySide6
+
+# Horarios del mercado en hora del Este (con horario de verano). En Windows,
+# Python no trae la base de zonas horarias: hace falta este paquete.
+tzdata

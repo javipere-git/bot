@@ -273,7 +273,29 @@ Exchange**.
 - **De donde salen los datos**: del MISMO streaming que ya alimenta el ladder, segun
   el perfil elegido (Tradier con `timesale`, Alpaca con `trades`). No abre conexiones
   nuevas ni gasta cupo de la API.
-- La cinta se limpia sola al cambiar de simbolo en el ladder.
+- **Siempre sigue al ladder**: la cinta muestra el simbolo que tengas cargado en la
+  escalera, lo hayas puesto vos o lo haya cargado el bot al pasar a manual. Se limpia
+  sola al cambiar de simbolo.
+
+---
+
+## 3c. Sesion OVERNIGHT (20:00 - 04:00 ET) - solo Alpaca
+
+Las acciones de EEUU tambien operan de noche, en **Blue Ocean ATS**, de **20:00 a
+04:00 ET, de domingo a jueves**. Esa sesion NO viaja por el feed consolidado (SIP):
+tiene su propio feed. Por eso:
+
+- **Con Alpaca (plan Algo Trader Plus), la app cambia de feed sola**: al entrar en la
+  sesion overnight se pasa al feed de Blue Ocean, y al terminar vuelve al normal. No
+  hay que tocar nada. El ladder y el Time & Sales muestran la sesion nocturna.
+- **Tradier NO tiene datos del overnight**: sus precios se quedan en el cierre de las
+  20:00 ET. Es una diferencia real entre los dos brokers.
+- El exchange que vas a ver en la cinta durante esa sesion es **B** (Blue Ocean).
+- Los spreads del overnight son MUCHO mas anchos y hay poca liquidez: es normal ver
+  la mayoria de las operaciones en gris (dentro del spread).
+- Viernes a la noche y sabado no hay sesion (la semana la abre el domingo a las 20:00).
+- Necesita el paquete `tzdata` (esta en requirements.txt) para saber la hora del Este
+  con horario de verano. Si faltara, la app usa el feed normal, como antes.
 
 ---
 

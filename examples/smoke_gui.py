@@ -90,6 +90,8 @@ def main() -> None:
     # (por_guardia=False para no abrir el cartel modal de la alarma en el smoke)
     win._on_manual("NVDA", False)
     print(f"ladder tras 'paso a manual': {win.ladder.symbol()} (esperado NVDA)")
+    # el Time & Sales SIEMPRE sigue al simbolo del ladder, tambien cuando lo carga el bot
+    print(f"Time&Sales sigue al ladder: {win.tape._symbol} (esperado NVDA)")
     print(f"alarma del guardia tildada por defecto: "
           f"{win.control.chk_guard_alarma.isChecked()} (esperado True)")
 

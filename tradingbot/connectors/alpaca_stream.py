@@ -27,6 +27,8 @@ from typing import Callable
 
 import websocket
 
+from ..core.horarios import es_sesion_overnight
+
 
 def _epoch(iso) -> float:
     """Hora ISO de Alpaca -> segundos desde 1970 (para mostrarla en hora local)."""
@@ -47,7 +49,7 @@ class AlpacaMarketStream:
         self._key = key
         self._secret = secret
         self._feed = feed
-        self._url = f"wss://stream.data.alpaca.markets/v2/{feed}"
+        self._url = self.url_actual()
         self._symbols: list[str] = []
         self._on_quote: Callable | None = None
         self._on_trade: Callable | None = None   # Time & Sales (operaciones)
@@ -117,6 +119,15 @@ class AlpacaMarketStream:
         return self._conectado
 
     # ---------- interno ----------
+    def url_actual(self) -> str:
+        """Direccion del stream que corresponde AHORA.
+
+        En la sesion overnight (20:00-04:00 ET) el consolidado (SIP) no publica
+        nada: los precios y las operaciones van por el feed de Blue Ocean."""
+        if self._feed != "iex" and es_sesion_overnight():
+            return "wss://stream.data.alpaca.markets/v1beta1/boats"
+        return f"wss://stream.data.alpaca.markets/v2/{self._feed}"
+
     def _msg(self, accion: str, simbolos: list) -> dict:
         """Mensaje de (des)suscripcion. Solo pide 'trades' si alguien escucha el
         Time & Sales, para no recibir mensajes al pedo."""
@@ -128,6 +139,9 @@ class AlpacaMarketStream:
     def _run(self) -> None:
         while not self._stop:
             try:
+                # el feed se elige EN CADA conexion: asi, al arrancar o terminar la
+                # sesion overnight, la reconexion ya entra por el feed correcto
+                self._url = self.url_actual()
                 self._ws = websocket.create_connection(self._url, timeout=15)
                 # 1) mensaje de bienvenida ("connected"); 2) auth; 3) esperar "authenticated"
                 self._ws.recv()
@@ -140,6 +154,10 @@ class AlpacaMarketStream:
                     self._ws.send(json.dumps(self._msg("subscribe", self._symbols)))
                 self._conectado = True
                 while not self._stop:
+                    # si cambio la sesion (20:00 o 04:00 ET), hay que pasarse al
+                    # otro feed: se corta y el ciclo reconecta por el que toca
+                    if self.url_actual() != self._url:
+                        break
                     try:
                         msg = self._ws.recv()
                     except websocket.WebSocketTimeoutException:

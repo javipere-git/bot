@@ -61,6 +61,8 @@ class MonitorPanel(QWidget):
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
+        # que el divisor pueda angostar este panel todo lo que el usuario quiera
+        self.setMinimumWidth(180)
         lay = QVBoxLayout(self)
         lay.setContentsMargins(6, 6, 6, 6)
 
@@ -70,8 +72,10 @@ class MonitorPanel(QWidget):
 
         self.lbl_pnl = QLabel("P/L del dia: --")
         self.lbl_pnl.setStyleSheet("font-weight: bold; font-size: 14px;")
+        self.lbl_pnl.setWordWrap(True)
         lay.addWidget(self.lbl_pnl)
         self.lbl_pnl_detalle = QLabel("")
+        self.lbl_pnl_detalle.setWordWrap(True)
         self.lbl_pnl_detalle.setStyleSheet("color: palette(mid);")
         lay.addWidget(self.lbl_pnl_detalle)
 
@@ -86,6 +90,10 @@ class MonitorPanel(QWidget):
         lay.addWidget(sec_ord, 1)
 
         self.lbl_counts = QLabel("Ejecutadas: 0   |   Canceladas: 0   |   ratio C/E: --")
+        # Sin wordWrap, esta linea larga exige ~880px de ancho minimo y bloquea el
+        # divisor (no se podia angostar el monitoreo). Con wrap, se parte en varias
+        # lineas y el panel se puede achicar todo lo que quieras.
+        self.lbl_counts.setWordWrap(True)
         lay.addWidget(self.lbl_counts)
 
         sec_exec = CollapsibleSection("Ejecutadas")
@@ -110,6 +118,10 @@ class MonitorPanel(QWidget):
         t.setEditTriggers(QAbstractItemView.NoEditTriggers)
         t.setSelectionBehavior(QAbstractItemView.SelectRows)
         t.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        t.horizontalHeader().setMinimumSectionSize(24)
+        # Sin esto, al llenarse de ordenes la tabla exige cada vez mas ancho y el
+        # divisor no se puede angostar (le come el espacio al Time & Sales).
+        t.setMinimumWidth(0)
         t.setSortingEnabled(True)  # click en el encabezado = ordenar
         return t
 
