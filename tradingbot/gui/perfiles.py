@@ -14,6 +14,8 @@ from typing import Callable
 
 from ..connectors.alpaca import AlpacaBroker
 from ..connectors.alpaca_stream import AlpacaMarketStream
+from ..connectors.alpaca_trade_stream import AlpacaTradeStream
+from ..connectors.tradier_account_stream import TradierAccountStream
 from ..connectors.hibrido import BrokerHibrido
 from ..connectors.tradier import TradierBroker
 
@@ -26,9 +28,15 @@ class Perfil:
     es_live: bool                    # True = dinero real (banner verde, doble confirmacion)
     _crear_broker: Callable[[], object]
     _crear_stream: Callable[[], object] | None = None
+    _crear_avisos: Callable[[], object] | None = None
 
     def crear_broker(self):
         return self._crear_broker()
+
+    def crear_avisos(self):
+        """Canal de AVISOS DE CUENTA (orden puesta/ejecutada/cancelada) para que la
+        pantalla se refresque al instante. None si el broker no lo ofrece."""
+        return self._crear_avisos() if self._crear_avisos else None
 
     def crear_stream(self):
         """Devuelve el StreamWorker de precios en vivo, o None si este broker
@@ -77,6 +85,17 @@ def perfiles_disponibles() -> list[Perfil]:
     El streaming de precios (Tradier) usa el token de produccion, asi que solo se
     ofrece si ese token esta cargado; si no, el ladder usa lectura por REST."""
     from .stream_worker import StreamWorker  # import tardio (evita ciclo)
+    from .account_worker import AccountWorker
+
+    def avisos_tradier():
+        return AccountWorker(
+            TradierAccountStream.from_credentials(environment="production"), "tradier")
+
+    def avisos_alpaca(entorno):
+        def crear():
+            return AccountWorker(
+                AlpacaTradeStream.from_credentials(environment=entorno), "alpaca")
+        return crear
 
     cfg = _leer_cfg()
     perfiles: list[Perfil] = []
@@ -105,6 +124,7 @@ def perfiles_disponibles() -> list[Perfil]:
             es_live=True,
             _crear_broker=lambda: TradierBroker.from_credentials(environment="production"),
             _crear_stream=stream_factory,
+            _crear_avisos=avisos_tradier,
         ))
 
     # Alpaca PAPER -- solo si cargo las claves paper. Streaming propio de Alpaca
@@ -119,6 +139,7 @@ def perfiles_disponibles() -> list[Perfil]:
             _crear_stream=lambda: StreamWorker(
                 AlpacaMarketStream.from_credentials(environment="paper")
             ),
+            _crear_avisos=avisos_alpaca("paper"),
         ))
 
     # Alpaca PAPER con DATOS de Tradier (NBBO real) -- si estan las dos cosas.
@@ -137,6 +158,7 @@ def perfiles_disponibles() -> list[Perfil]:
                 datos=TradierBroker.from_credentials(environment="production"),
             ),
             _crear_stream=stream_factory,   # streaming de precios de Tradier
+            _crear_avisos=avisos_alpaca("paper"),   # avisos de la cuenta de Alpaca
         ))
 
     # Alpaca LIVE (DINERO REAL) -- solo si cargo las claves de la cuenta real.
@@ -155,6 +177,7 @@ def perfiles_disponibles() -> list[Perfil]:
                     datos=TradierBroker.from_credentials(environment="production"),
                 ),
                 _crear_stream=stream_factory,
+                _crear_avisos=avisos_alpaca("live"),
             ))
         perfiles.append(Perfil(
             id="alpaca_live",
@@ -165,6 +188,7 @@ def perfiles_disponibles() -> list[Perfil]:
             _crear_stream=lambda: StreamWorker(
                 AlpacaMarketStream.from_credentials(environment="live")
             ),
+            _crear_avisos=avisos_alpaca("live"),
         ))
 
     return perfiles

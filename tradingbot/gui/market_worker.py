@@ -23,6 +23,7 @@ class MarketWorker(QObject):
     error = Signal(str)
 
     ORDENES_RECIENTES = 400   # cuantas ordenes nuevas se piden en cada refresco
+    MIN_REFRESCO = 0.4        # segundos minimos entre refrescos disparados por avisos
 
     def __init__(
         self, broker, interval: float = 3.0, intervalo_completo: float = 60.0
@@ -40,6 +41,12 @@ class MarketWorker(QObject):
         self._stop = False
         self._ladder_symbol = None
         self._ladder_ya = False   # pedir el precio del ladder YA (cambio de simbolo)
+        # Refresco inmediato disparado por un aviso del broker (orden puesta,
+        # ejecutada, cancelada...). Con freno: como maximo uno cada MIN_REFRESCO
+        # segundos, para que una rafaga de avisos del bot no dispare decenas de
+        # llamadas y agote el cupo de la API.
+        self._refrescar_ya = False
+        self._ultimo_refresco = 0.0
 
     @Slot()
     def run(self) -> None:
@@ -50,21 +57,7 @@ class MarketWorker(QObject):
                 self.day_pnl.emit(self._resultado_del_dia(pos))
             except Exception as e:  # noqa: BLE001
                 self.error.emit(f"Monitoreo (posiciones): {e}")
-            try:
-                ahora = time.monotonic()
-                if ahora - self._ultimo_completo >= self._intervalo_completo:
-                    self._ultimo_completo = ahora
-                    # pasada COMPLETA (lenta, cada tanto): rearma todo desde cero
-                    self._cache_ordenes = {o.id: o for o in self._broker.get_orders()}
-                else:
-                    # refresco rapido: solo las mas recientes, encima de lo que hay
-                    for o in self._broker.get_orders(limit=self.ORDENES_RECIENTES):
-                        self._cache_ordenes[o.id] = o
-                todas = list(self._cache_ordenes.values())
-                self.orders.emit([o for o in todas if o.is_active])
-                self.closed_orders.emit([o for o in todas if not o.is_active])
-            except Exception as e:  # noqa: BLE001
-                self.error.emit(f"Monitoreo (ordenes): {e}")
+            self._emitir_ordenes()
             self._emitir_quote_ladder()
             # dormir en tramos cortos para poder cortar rapido al cerrar
             slept = 0.0
@@ -78,6 +71,38 @@ class MarketWorker(QObject):
                 if self._ladder_ya:
                     self._ladder_ya = False
                     self._emitir_quote_ladder()
+                # aviso del broker: refrescar ordenes YA (con el freno de MIN_REFRESCO)
+                if self._refrescar_ya:
+                    if time.monotonic() - self._ultimo_refresco >= self.MIN_REFRESCO:
+                        self._refrescar_ya = False
+                        self._emitir_ordenes()
+                        try:
+                            self.positions.emit(self._broker.get_positions())
+                        except Exception:  # noqa: BLE001
+                            pass
+
+    def _emitir_ordenes(self) -> None:
+        """Lee las ordenes y las manda a la pantalla (abiertas / cerradas)."""
+        try:
+            ahora = time.monotonic()
+            if ahora - self._ultimo_completo >= self._intervalo_completo:
+                self._ultimo_completo = ahora
+                # pasada COMPLETA (lenta, cada tanto): rearma todo desde cero
+                self._cache_ordenes = {o.id: o for o in self._broker.get_orders()}
+            else:
+                # refresco rapido: solo las mas recientes, encima de lo que hay
+                for o in self._broker.get_orders(limit=self.ORDENES_RECIENTES):
+                    self._cache_ordenes[o.id] = o
+            todas = list(self._cache_ordenes.values())
+            self.orders.emit([o for o in todas if o.is_active])
+            self.closed_orders.emit([o for o in todas if not o.is_active])
+            self._ultimo_refresco = time.monotonic()
+        except Exception as e:  # noqa: BLE001
+            self.error.emit(f"Monitoreo (ordenes): {e}")
+
+    def refrescar_ya(self) -> None:
+        """Lo llama la ventana cuando el broker avisa que una orden cambio."""
+        self._refrescar_ya = True
 
     def _resultado_del_dia(self, posiciones):
         """Resultado del DIA (realizado + abierto) tal como lo informa el broker.

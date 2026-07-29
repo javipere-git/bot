@@ -291,6 +291,11 @@ Exchange**.
 - **Exchange**: el codigo de una letra que manda el broker (`Q` Nasdaq, `P` NYSE
   Arca, `K` Cboe EDGX, `B` Blue Ocean en el feed overnight...). Dejando el mouse
   encima aparece el nombre completo.
+- **OJO, diferencia entre brokers**: el feed de operaciones de **Tradier entrega
+  MUCHOS menos prints que Alpaca**. Medido el 29/07/2026 con SPY, en la misma ventana
+  de 30 segundos: Tradier 9 prints, Alpaca (SIP) 61 -> **Alpaca entrega ~7x mas**.
+  No es un problema de la app: el feed de Tradier parece venir muestreado. Si necesitas
+  leer la cinta en detalle, conviene el perfil de Alpaca con SIP.
 - **Rendimiento**: las operaciones se vuelcan a la tabla en lotes (cada 150 ms) y se
   guardan las ultimas 500. No se pierde ningun print de los que ves; lo unico que se
   limita es cuanto historial queda hacia atras.
@@ -342,6 +347,26 @@ tiene su propio feed. Por eso:
   ultimas 300 (dice "[muestro las ultimas 300]" al lado de los conteos); los conteos
   y el ratio siempre son sobre el TOTAL real del dia. Es para que 1500+ ordenes no
   pongan lenta la pantalla.
+
+---
+
+## 4a. Avisos instantaneos del broker (29/07/2026)
+
+Antes, la app se enteraba de que una orden se puso, se ejecuto o se cancelo recien
+en el **proximo sondeo, cada 4 segundos**. Eso retrasaba el ladder, las tres listas
+de ordenes y el sonido.
+
+Ahora los dos brokers **avisan** y la pantalla se refresca en el momento:
+
+- **Tradier LIVE**: `wss://ws.tradier.com/v1/accounts/events` (el sandbox NO lo tiene).
+- **Alpaca** (paper y real): el mismo stream de avisos que ya usaba el conector.
+
+Medido: el aviso llega en **~170-200 ms** (antes hasta 4.000 ms). En el registro
+aparece "Avisos de cuenta activos" al abrir; si el broker no los ofrece (Tradier
+sandbox), avisa que se refresca por sondeo.
+
+**Freno**: como maximo un refresco cada 0,4 segundos. Sin esto, una rafaga de ordenes
+del bot dispararia decenas de llamadas y agotaria el cupo de la API.
 
 ---
 

@@ -118,6 +118,7 @@ class MainWindow(QMainWindow):
 
         self._manual_broker = None  # canal para operar manual desde el ladder
         self._stream = None         # streaming de precios en vivo (produccion, solo lectura)
+        self._avisos = None         # avisos de cuenta (orden puesta/ejecutada/cancelada)
         self._closed_seen = None    # ids de ordenes cerradas ya vistas (sonido / rechazos)
         self._pos_warned = False    # para avisar UNA vez si hay posicion abierta al abrir
         self.control = ControlPanel()
@@ -157,6 +158,8 @@ class MainWindow(QMainWindow):
         self._arrancar_monitoreo()
         # streaming de precios en vivo para el ladder (token de produccion, SOLO lectura)
         self._arrancar_streaming()
+        # avisos de cuenta: para que las ordenes aparezcan al instante
+        self._arrancar_avisos()
 
         # indicador permanente de conexion del streaming en el encabezado
         self._conexion_timer = QTimer(self)
@@ -368,6 +371,30 @@ class MainWindow(QMainWindow):
         self._stream.trade.connect(self.tape.agregar_trade)
         self.control.append_log("Streaming en vivo activo (produccion, SOLO lectura de precios).")
 
+    def _arrancar_avisos(self) -> None:
+        """Canal de avisos del broker: cuando una orden cambia de estado, refresca
+        el monitoreo y el ladder EN EL MOMENTO (medido: ~200 ms) en vez de esperar
+        el sondeo de cada 4 segundos."""
+        try:
+            self._avisos = self._perfil.crear_avisos()
+        except Exception as e:  # noqa: BLE001
+            self._avisos = None
+            self.control.append_log(f"Sin avisos instantaneos del broker: {e}")
+            return
+        if self._avisos is None:
+            self.control.append_log(
+                "Este broker no ofrece avisos de cuenta: las ordenes se refrescan "
+                "por sondeo (puede tardar unos segundos)."
+            )
+            return
+        self._avisos.cambio.connect(self._refrescar_ordenes_ya)
+        self._avisos.start()
+        self.control.append_log("Avisos de cuenta activos: las ordenes aparecen al instante.")
+
+    def _refrescar_ordenes_ya(self) -> None:
+        if getattr(self, "_market_worker", None) is not None:
+            self._market_worker.refrescar_ya()
+
     def _on_positions(self, positions) -> None:
         """Al abrir la app, avisa UNA vez si ya habia una posicion abierta de antes
         (ej. quedo de una sesion anterior o de un cierre inesperado)."""
@@ -447,6 +474,8 @@ class MainWindow(QMainWindow):
             self._market_thread.wait(3000)
         if self._stream is not None:
             self._stream.stop()
+        if self._avisos is not None:
+            self._avisos.stop()
         try:
             from ..connectors.alpaca import detener_streams_de_cuenta
             detener_streams_de_cuenta()
