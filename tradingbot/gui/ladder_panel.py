@@ -26,6 +26,7 @@ from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QBrush, QColor, QCursor
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QCheckBox,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -206,6 +207,14 @@ class LadderPanel(QWidget):
         self.btn_center.clicked.connect(self._centrar)
         fila_zoom.addWidget(self.btn_center)
         fila_zoom.addStretch()
+        self.chk_ext = QCheckBox("Ext. hours")
+        self.chk_ext.setToolTip(
+            "TILDADO: la orden PUEDE ejecutarse fuera de la rueda regular\n"
+            "(pre-market, post-market y overnight).\n"
+            "DESTILDADO: si el mercado esta cerrado, la orden queda en cola y se\n"
+            "ejecuta recien en la proxima apertura."
+        )
+        fila_zoom.addWidget(self.chk_ext)
         self.btn_cancel_all = QPushButton("Cancelar todo")
         self.btn_cancel_all.setToolTip("Cancela TODAS las ordenes abiertas de la cuenta")
         self.btn_cancel_all.clicked.connect(self._cancelar_todas)
@@ -230,7 +239,10 @@ class LadderPanel(QWidget):
         self.tabla.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.tabla.setSelectionMode(QAbstractItemView.NoSelection)
         self.tabla.setStyleSheet("font-size: 11px;")
-        self.tabla.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        cab = self.tabla.horizontalHeader()
+        cab.setSectionResizeMode(QHeaderView.Interactive)   # ancho ajustable a mano
+        cab.setStretchLastSection(True)
+        cab.setSectionsMovable(True)                        # columnas arrastrables
         self.tabla.cellClicked.connect(self._click_celda)
         self.tabla.orderMoved.connect(self._mover_orden)
         lay.addWidget(self.tabla, 1)
@@ -494,7 +506,8 @@ class LadderPanel(QWidget):
         qty = self.spin_size.value()
         try:
             orden = broker.place_order(
-                OrderRequest(self._symbol, side, qty, round(precio, 2), OrderType.LIMIT)
+                OrderRequest(self._symbol, side, qty, round(precio, 2), OrderType.LIMIT,
+                             extended=self.chk_ext.isChecked())
             )
             self._log(f"Ladder: {side.value} {qty} {self._symbol} @ {precio:.2f} "
                       f"enviada (id {orden.id}).")

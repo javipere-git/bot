@@ -117,7 +117,11 @@ class MonitorPanel(QWidget):
         t.verticalHeader().setVisible(False)
         t.setEditTriggers(QAbstractItemView.NoEditTriggers)
         t.setSelectionBehavior(QAbstractItemView.SelectRows)
-        t.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        # Interactive + ultima columna elastica: el usuario puede ajustar el ancho
+        # de cada columna a mano, y arrastrarlas para cambiarlas de lugar.
+        t.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
+        t.horizontalHeader().setStretchLastSection(True)
+        t.horizontalHeader().setSectionsMovable(True)
         t.horizontalHeader().setMinimumSectionSize(24)
         # Sin esto, al llenarse de ordenes la tabla exige cada vez mas ancho y el
         # divisor no se puede angostar (le come el espacio al Time & Sales).

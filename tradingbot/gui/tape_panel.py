@@ -72,8 +72,11 @@ class TapePanel(QWidget):
         self.tabla.verticalHeader().setVisible(False)
         self.tabla.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.tabla.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.tabla.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.tabla.horizontalHeader().setMinimumSectionSize(24)
+        cab = self.tabla.horizontalHeader()
+        cab.setSectionResizeMode(QHeaderView.Interactive)   # ancho ajustable a mano
+        cab.setStretchLastSection(True)
+        cab.setSectionsMovable(True)                        # columnas arrastrables
+        cab.setMinimumSectionSize(24)
         self.tabla.setMinimumWidth(0)
         self.tabla.setStyleSheet("font-size: 11px;")
         self.tabla.verticalHeader().setDefaultSectionSize(18)

@@ -66,6 +66,9 @@ class OrderRequest:
     price: float
     type: OrderType = OrderType.LIMIT
     duration: Duration = Duration.DAY
+    # True = la orden PUEDE ejecutarse fuera de la rueda regular (pre/post/overnight).
+    # False = si el mercado esta cerrado, queda en cola para la proxima apertura.
+    extended: bool = False
 
 
 @dataclass

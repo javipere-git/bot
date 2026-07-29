@@ -18,6 +18,7 @@ from typing import Any, Callable
 import requests
 
 from ..core.broker import Broker
+from ..core.horarios import duracion_extendida
 from ..core.models import (
     DayPnL,
     Duration,
@@ -296,7 +297,10 @@ class TradierBroker(Broker):
             "side": request.side.value,
             "quantity": str(request.quantity),
             "type": request.type.value,
-            "duration": request.duration.value,
+            # Tradier no tiene un tilde de "extended hours": se pide con la
+            # DURACION ('pre' antes de las 09:30 ET, 'post' despues).
+            "duration": (duracion_extendida() if request.extended
+                         else request.duration.value),
         }
         if request.type == OrderType.LIMIT:
             data["price"] = f"{request.price:.2f}"

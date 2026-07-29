@@ -76,6 +76,7 @@ class EngineConfig:
     volume_min: int | None = None       # filtro de volumen operado en el dia, en
     volume_max: int | None = None       # acciones (None = sin limite por ese lado)
     duration: Duration = Duration.DAY   # por defecto DAY
+    extended_hours: bool = False        # operar tambien fuera de la rueda regular
     reprice_mode: str = "modify"        # "modify" (recomendado) o "cancel_new"
     poll_interval_s: float = 0.5        # cada cuanto consulta estado / cotizacion
 

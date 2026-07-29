@@ -141,7 +141,11 @@ permite UNA sola conexion de streaming de datos a la vez (con Algo Trader Plus, 
   que Reanudar para seguir con el siguiente simbolo). Destildado: sigue solo.
 - **Repetir watchlist (loop)**: tildado recorre la lista una y otra vez hasta Detener;
   destildado hace una sola pasada y se detiene avisando.
-- **Extended hours**: todavia NO esta cableado (usa siempre DAY).
+- **Extended hours (pre/post)**: TILDADO, las ordenes del bot pueden ejecutarse
+  fuera de la rueda regular. DESTILDADO, si el mercado esta cerrado la orden queda
+  en cola y se ejecuta en la proxima apertura. Funciona en los dos brokers (Alpaca
+  manda `extended_hours=true`; Tradier usa la duracion `pre`/`post` segun la hora).
+  El ladder tiene su propio tilde igual, para las ordenes manuales.
 - **Sonido al ejecutar**: sonido (distinto al de alerta) cuando se llena una orden
   (del bot o manual).
 
@@ -241,6 +245,13 @@ la posicion este cerrada. (Si ya estabas mirando ese mismo simbolo, no se toca n
 - **Arrastrar** una orden a otro nivel = modifica su precio (no cancela y remanda).
 - **Marca amarilla** = tu precio promedio de la posicion.
 - **"Comprar al ask" / "Vender al bid"**: ordenes marketables al instante.
+- **Tilde "Ext. hours"** (al lado del zoom): mismo criterio que el del bot, pero para
+  las ordenes manuales del ladder. Tildado = puede ejecutarse fuera de la rueda
+  regular (incluido el overnight en Alpaca). Destildado = si el mercado esta cerrado,
+  la orden espera a la apertura.
+- **Columnas**: en TODAS las tablas de la app (monitoreo, ladder y Time & Sales) se
+  puede ajustar el ancho de cada columna arrastrando el borde del encabezado, y
+  cambiarlas de lugar arrastrando el titulo.
 - **"Cancelar todo"**: cancela TODAS las ordenes abiertas de la cuenta (util si el
   precio se mueve rapido y cuesta encontrar la orden en la escalera).
 - El BID/ASK grandes arriba muestran el NBBO claramente.

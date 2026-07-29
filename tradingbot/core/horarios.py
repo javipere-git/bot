@@ -67,6 +67,15 @@ def inicio_dia_operativo(momento: datetime | None = None) -> datetime:
     return inicio.astimezone(timezone.utc)
 
 
+def duracion_extendida(momento: datetime | None = None) -> str:
+    """Para Tradier, que no tiene un tilde de 'extended hours' sino DURACIONES
+    distintas: 'pre' (antes de las 09:30 ET) o 'post' (despues)."""
+    t = momento or ahora_et()
+    if t is None:
+        return "post"
+    return "pre" if (t.hour * 60 + t.minute) < 570 else "post"
+
+
 def nombre_sesion(momento: datetime | None = None) -> str:
     """Nombre de la sesion actual, para mostrar en pantalla."""
     t = momento or ahora_et()

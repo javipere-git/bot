@@ -323,7 +323,8 @@ class BotEngine:
         )
         order, ok = self._place(
             OrderRequest(sym, self._cfg.side, self._cfg.quantity, price1,
-                         OrderType.LIMIT, self._cfg.duration)
+                         OrderType.LIMIT, self._cfg.duration,
+                         extended=self._cfg.extended_hours)
         )
         if not ok:
             return None
@@ -410,7 +411,9 @@ class BotEngine:
             self._log(f"{sym}: salida nivel {i} {etiqueta}  (timeout {level.timeout_s:.0f}s)")
             if order is None:
                 order, ok = self._place(
-                    OrderRequest(sym, exit_side, qty, price, OrderType.LIMIT, self._cfg.duration)
+                    OrderRequest(sym, exit_side, qty, price, OrderType.LIMIT,
+                                 self._cfg.duration,
+                                 extended=self._cfg.extended_hours)
                 )
                 if not ok:
                     order = None
@@ -552,7 +555,8 @@ class BotEngine:
             side = Side.SELL if pos.is_long else Side.BUY_TO_COVER
             _, ok = self._place(
                 OrderRequest(sym, side, abs(pos.quantity), cross,
-                             OrderType.LIMIT, self._cfg.duration)
+                             OrderType.LIMIT, self._cfg.duration,
+                             extended=self._cfg.extended_hours)
             )
             if not ok:
                 return
@@ -680,7 +684,8 @@ class BotEngine:
         self._safe_cancel(order.id)
         nueva, ok = self._place(
             OrderRequest(sym, self._cfg.side, self._cfg.quantity, new_price,
-                         OrderType.LIMIT, self._cfg.duration)
+                         OrderType.LIMIT, self._cfg.duration,
+                         extended=self._cfg.extended_hours)
         )
         if not ok:
             return None, False

@@ -224,7 +224,10 @@ class MainWindow(QMainWindow):
                 return
 
         if self.control.chk_ext.isChecked():
-            self.control.append_log("Nota: 'Extended hours' todavia no esta cableado; se usa DAY.")
+            self.control.append_log(
+                "Extended hours ACTIVADO: las ordenes pueden ejecutarse fuera de la "
+                "rueda regular (pre/post; overnight en Alpaca)."
+            )
 
         etiqueta = "LIVE - DINERO REAL" if es_live else "paper"
         self.control.append_log(

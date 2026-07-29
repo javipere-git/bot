@@ -460,6 +460,10 @@ class AlpacaBroker(Broker):
         }
         if request.type == OrderType.LIMIT:
             body["limit_price"] = f"{request.price:.2f}"
+        if request.extended:
+            # habilita pre-market, post-market y overnight (Blue Ocean).
+            # Alpaca exige que sea limite; sin esto la orden espera a la apertura.
+            body["extended_hours"] = True
         data = self._send("POST", "/v2/orders", json_body=body)
         return Order(
             id=str((data or {}).get("id", "")),

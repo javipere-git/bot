@@ -386,6 +386,7 @@ class ControlPanel(QWidget):
             order2=order2,
             spread_min=self._parse_float(self.ed_spread_min.text()),
             spread_max=self._parse_float(self.ed_spread_max.text()),
+            extended_hours=self.chk_ext.isChecked(),
             volume_min=self._parse_int(self.ed_vol_min.text()),
             volume_max=self._parse_int(self.ed_vol_max.text()),
             exit_levels=exit_levels,
