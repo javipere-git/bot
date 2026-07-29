@@ -12,7 +12,7 @@ su propio feed. Por eso hace falta saber en que sesion estamos.
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 try:
     from zoneinfo import ZoneInfo
@@ -46,6 +46,25 @@ def es_sesion_overnight(momento: datetime | None = None) -> bool:
     if t.hour < 4:             # la sesion arranco anoche
         return dia in (0, 1, 2, 3, 4)      # lunes a viernes de madrugada
     return False
+
+
+def inicio_dia_operativo(momento: datetime | None = None) -> datetime:
+    """Cuando arranco el dia operativo en curso, en UTC.
+
+    El corte son las **04:00 ET** (cuando abre el pre-market), NO la medianoche:
+    la sesion overnight (20:00-04:00) es la continuacion del dia que ya venia
+    corriendo. Si se cortara a medianoche, a las 22:00 ET el filtro caeria en el
+    futuro y esconderia TODAS las ordenes (paso de verdad el 29/07/2026).
+
+    Sin zona horaria disponible, cae a 'hace 20 horas': puede mostrar algo de mas,
+    pero NUNCA esconde ordenes -que es el error grave-."""
+    t = momento or ahora_et()
+    if t is None:
+        return datetime.now(timezone.utc) - timedelta(hours=20)
+    inicio = t.replace(hour=4, minute=0, second=0, microsecond=0)
+    if t < inicio:                      # antes de las 4 AM: empezo ayer
+        inicio -= timedelta(days=1)
+    return inicio.astimezone(timezone.utc)
 
 
 def nombre_sesion(momento: datetime | None = None) -> str:

@@ -26,7 +26,7 @@ from typing import Any, Callable
 import requests
 
 from ..core.broker import Broker
-from ..core.horarios import es_sesion_overnight
+from ..core.horarios import es_sesion_overnight, inicio_dia_operativo
 from .alpaca_trade_stream import AlpacaTradeStream
 from ..core.models import (
     DayPnL,
@@ -333,12 +333,13 @@ class AlpacaBroker(Broker):
 
     @staticmethod
     def _after_hoy() -> str:
-        """Inicio del dia de mercado de HOY, para pedirle a Alpaca solo las ordenes
-        de hoy (Tradier ya filtra por dia, Alpaca NO -> devolvia tambien las de ayer).
-        Las 05:00 UTC cubren la medianoche del Este (04:00 UTC en verano, 05:00 en
-        invierno) y excluyen todo lo de ayer. Sirve para day trading en horario normal
-        (no cubre operaciones de madrugada / after-hours tardio, que no se usan)."""
-        return datetime.now(timezone.utc).strftime("%Y-%m-%dT05:00:00Z")
+        """Desde cuando pedirle las ordenes a Alpaca (Tradier ya filtra por dia,
+        Alpaca NO -> devolvia tambien las de ayer).
+
+        Es el inicio del DIA OPERATIVO (04:00 ET), no la medianoche: asi la sesion
+        overnight queda incluida. Antes se usaba 'hoy a las 05:00 UTC', que durante
+        el overnight caia en el FUTURO y escondia todas las ordenes."""
+        return inicio_dia_operativo().strftime("%Y-%m-%dT%H:%M:%SZ")
 
     def get_orders(self, limit: int | None = None) -> list[Order]:
         """Ordenes de HOY (vivas + cerradas). Alpaca da hasta 500 por pagina; si hay

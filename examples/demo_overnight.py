@@ -25,7 +25,9 @@ try:
 except Exception:  # noqa: BLE001
     ET = None
 
-from tradingbot.core.horarios import es_sesion_overnight, nombre_sesion  # noqa: E402
+from tradingbot.core.horarios import (  # noqa: E402
+    es_sesion_overnight, inicio_dia_operativo, nombre_sesion,
+)
 
 
 def parte1() -> bool:
@@ -58,6 +60,36 @@ def parte1() -> bool:
     return ok
 
 
+def parte1b() -> bool:
+    """Regresion del bug del 29/07/2026: durante el overnight, el filtro de
+    'ordenes de hoy' caia en el FUTURO y escondia TODAS las ordenes (el usuario
+    mando una orden desde el ladder, Alpaca la acepto, y la app no la mostraba)."""
+    if ET is None:
+        return True
+    print("PARTE 1b: el filtro de 'ordenes del dia' NUNCA puede quedar en el futuro")
+    print("-" * 68)
+    ok = True
+    casos = [
+        ((2026, 7, 28, 23, 38), "de noche, en pleno overnight (el caso del bug)"),
+        ((2026, 7, 29, 2, 30),  "madrugada (el dia operativo empezo ayer)"),
+        ((2026, 7, 29, 3, 59),  "un minuto antes del corte de las 04:00"),
+        ((2026, 7, 29, 4, 1),   "un minuto despues del corte"),
+        ((2026, 7, 29, 10, 0),  "media rueda"),
+        ((2026, 7, 29, 19, 0),  "post-market"),
+    ]
+    for partes, porque in casos:
+        t = datetime(*partes, tzinfo=ET)
+        ini = inicio_dia_operativo(t)
+        futuro = ini > t
+        horas = (t - ini).total_seconds() / 3600
+        bien = (not futuro) and 0 <= horas <= 24
+        ok = ok and bien
+        print(f"  {'OK ' if bien else '***'} {t.strftime('%a %d/%m %H:%M ET')} -> pide desde "
+              f"{ini.strftime('%d/%m %H:%M UTC')} ({horas:4.1f}h atras) | {porque}")
+    print()
+    return ok
+
+
 def parte2() -> bool:
     from tradingbot.connectors.alpaca import AlpacaBroker
     from tradingbot.connectors.alpaca_stream import AlpacaMarketStream
@@ -79,6 +111,7 @@ def parte2() -> bool:
 
 def main() -> None:
     ok = parte1()
+    ok = parte1b() and ok
     if "--real" in sys.argv:
         ok = parte2() and ok
     else:
