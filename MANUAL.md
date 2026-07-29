@@ -217,6 +217,18 @@ la posicion este cerrada. (Si ya estabas mirando ese mismo simbolo, no se toca n
 - Escribir simbolo + **Ver**. La escalera se centra sola en el bid/ask.
 - **Carga automatica**: si el bot deja una posicion para cerrar a mano, el simbolo se
   carga aca solo (ver "Cuando el bot pasa a manual").
+- **CONGELADA con el mouse encima** (como ThinkorSwim): mientras el cursor esta sobre
+  la escalera, **los precios quedan clavados en su fila**. Es una proteccion al click:
+  sin esto, si el precio se mueve justo cuando vas a clickear, la fila cambia de precio
+  abajo del cursor y la orden sale a OTRO precio.
+  - Lo que SI se sigue actualizando mientras esta congelada: el BID/ASK grande de
+    arriba, los tamanos, tus ordenes dibujadas y la marca del promedio. Lo unico que
+    se fija es QUE precio esta en QUE fila.
+  - Si el precio se va FUERA de la vista, aparece un aviso abajo con el precio real
+    ("CONGELADA... el precio se fue a X x Y"). Si el mercado sigue visible, no molesta
+    con mensajes.
+  - Al sacar el mouse, la escalera vuelve a seguir al mercado sola.
+  - El boton **Centrar** funciona igual aunque el mouse este encima.
 - **Re-centrado inteligente**: la escalera se vuelve a centrar SOLO cuando cambia el
   primer nivel (el precio del bid o del ask) o al cambiar el zoom. Si el NBBO no
   cambio (solo cambian los tamanos, o tus ordenes), tu scroll se respeta: podes

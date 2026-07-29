@@ -23,7 +23,7 @@ import time
 from typing import Callable
 
 from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtGui import QBrush, QColor
+from PySide6.QtGui import QBrush, QColor, QCursor
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QHBoxLayout,
@@ -113,6 +113,7 @@ class LadderPanel(QWidget):
     MARGEN_NIVELES = 14
     MAX_FILAS = 600
     STEPS = [0.01, 0.02, 0.05, 0.10, 0.25]
+    AYUDA = "Click en Compra/Venta = orden; click en tu orden = cancelar."
     STALE_SECS = 8    # segundos sin quote nuevo -> aviso "datos viejos"
 
     def __init__(
@@ -133,6 +134,7 @@ class LadderPanel(QWidget):
         self._avg = None        # precio promedio de la posicion del simbolo activo
         self._last_nbbo = None  # (bid_lvl, ask_lvl, paso) del ultimo centrado
         self._pendiente = False # hay datos nuevos por repintar (repintado throttleado)
+        self._ancla = None      # (top_lvl, bot_lvl, paso) fijado mientras esta congelada
 
         lay = QVBoxLayout(self)
         lay.setContentsMargins(6, 6, 6, 6)
@@ -233,7 +235,7 @@ class LadderPanel(QWidget):
         self.tabla.orderMoved.connect(self._mover_orden)
         lay.addWidget(self.tabla, 1)
 
-        self._ayuda = QLabel("Click en Compra/Venta = orden; click en tu orden = cancelar.")
+        self._ayuda = QLabel(self.AYUDA)
         self._ayuda.setStyleSheet("color: palette(mid);")
         self._ayuda.setWordWrap(True)
         lay.addWidget(self._ayuda)
@@ -259,6 +261,7 @@ class LadderPanel(QWidget):
         self._avg = None
         self._last = None
         self._last_nbbo = None
+        self._ancla = None
         self.tabla.setRowCount(0)
         self.lbl_bid.setText("BID --")
         self.lbl_ask.setText("ASK --")
@@ -326,6 +329,19 @@ class LadderPanel(QWidget):
         self._avg = next((p.avg_price for p in positions if p.symbol == self._symbol), None)
         self._pendiente = True
 
+    # ---------- congelado con el mouse encima ----------
+    def _mouse_sobre_escalera(self) -> bool:
+        """True si el cursor esta sobre la escalera. Mientras lo este, los precios
+        NO se mueven de fila (ver _repoblar). Se calcula por geometria, sin guardar
+        estado, para que sea IMPOSIBLE que quede congelada por error."""
+        try:
+            vp = self.tabla.viewport()
+            if not vp.isVisible():
+                return False
+            return vp.rect().contains(vp.mapFromGlobal(QCursor.pos()))
+        except Exception:  # noqa: BLE001
+            return False
+
     # ---------- dibujo de la escalera ----------
     def _repoblar(self) -> None:
         if not self._last:
@@ -334,14 +350,26 @@ class LadderPanel(QWidget):
         step_c = round(self.STEPS[self._step_idx] * 100)
         bid_lvl = round(round(bid * 100) / step_c)
         ask_lvl = round(round(ask * 100) / step_c)
-        # Re-centrar SOLO si cambio el primer nivel (bid o ask) o el paso del zoom.
-        # Si el NBBO no cambio, las filas quedan identicas y el scroll del usuario
-        # se respeta (puede explorar precios sin que se lo arranquen).
         nbbo = (bid_lvl, ask_lvl, step_c)
-        recentrar = nbbo != self._last_nbbo
-        self._last_nbbo = nbbo
-        top_lvl = ask_lvl + self.MARGEN_NIVELES
-        bot_lvl = bid_lvl - self.MARGEN_NIVELES
+
+        # CONGELADO: con el mouse sobre la escalera, los precios quedan CLAVADOS en
+        # su fila (se reusa el rango anterior). Sin esto, si el precio se mueve justo
+        # cuando vas a hacer click, la fila cambia de precio abajo del cursor y la
+        # orden sale a otro precio. Lo demas (tamanos, NBBO, tus ordenes) se sigue
+        # actualizando: lo unico que se fija es QUE precio esta en QUE fila.
+        congelada = self._mouse_sobre_escalera() and self._ancla is not None
+        if congelada and self._ancla[2] == step_c:
+            top_lvl, bot_lvl, _ = self._ancla
+            recentrar = False           # tampoco se mueve el scroll
+        else:
+            # Re-centrar SOLO si cambio el primer nivel (bid o ask) o el paso del zoom.
+            # Si el NBBO no cambio, las filas quedan identicas y el scroll del usuario
+            # se respeta (puede explorar precios sin que se lo arranquen).
+            recentrar = nbbo != self._last_nbbo
+            self._last_nbbo = nbbo
+            top_lvl = ask_lvl + self.MARGEN_NIVELES
+            bot_lvl = bid_lvl - self.MARGEN_NIVELES
+            self._ancla = (top_lvl, bot_lvl, step_c)
         filas = top_lvl - bot_lvl + 1
         if filas <= 0 or filas > self.MAX_FILAS:
             self.tabla.setRowCount(0)
@@ -381,9 +409,22 @@ class LadderPanel(QWidget):
             self.tabla.scrollToItem(self.tabla.item(centro, C_PRICE),
                                     QAbstractItemView.PositionAtCenter)
 
+        # Aviso SOLO cuando importa: congelada y ademas el mercado se fue de la vista
+        # (si el NBBO sigue visible no molesto con mensajes).
+        fuera = not (bot_lvl <= bid_lvl <= top_lvl or bot_lvl <= ask_lvl <= top_lvl)
+        if congelada and fuera:
+            self._ayuda.setText(
+                f"CONGELADA (mouse encima). El precio se fue a {bid:.2f} x {ask:.2f}: "
+                f"saca el mouse o apreta Centrar."
+            )
+        else:
+            self._ayuda.setText(self.AYUDA)
+
     def _centrar(self) -> None:
-        """Boton 'Centrar': fuerza el re-centrado en el bid/ask actual."""
+        """Boton 'Centrar': fuerza el re-centrado en el bid/ask actual (aunque este
+        congelada por tener el mouse encima)."""
         self._last_nbbo = None
+        self._ancla = None
         self._repoblar()
 
     def _set(self, row, col, text, bold=False, bg=None) -> None:
