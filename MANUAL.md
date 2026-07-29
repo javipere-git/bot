@@ -251,6 +251,32 @@ forma de verlos con la API de Tradier.
 
 ---
 
+## 3b. Time & Sales (la cinta)
+
+Panel a la DERECHA del ladder. Muestra las operaciones ejecutadas del simbolo que
+tenes cargado en el ladder, la mas reciente arriba: **Hora, Precio, Cantidad y
+Exchange**.
+
+- **NO agrupa prints**: si salen 10 operaciones de 10 acciones, se ven las 10. Esa
+  es la informacion que se lee en la cinta.
+- **Color = quien fue el agresivo**, comparando contra el NBBO del momento:
+  - **verde**: se dio en el ask o mas arriba (compro el agresivo),
+  - **rojo**: se dio en el bid o mas abajo (vendio el agresivo),
+  - **gris**: quedo dentro del spread (no se sabe). Con spreads anchos -por ejemplo
+    en el overnight- es normal que casi todo salga gris.
+- **Exchange**: el codigo de una letra que manda el broker (`Q` Nasdaq, `P` NYSE
+  Arca, `K` Cboe EDGX, `B` Blue Ocean en el feed overnight...). Dejando el mouse
+  encima aparece el nombre completo.
+- **Rendimiento**: las operaciones se vuelcan a la tabla en lotes (cada 150 ms) y se
+  guardan las ultimas 500. No se pierde ningun print de los que ves; lo unico que se
+  limita es cuanto historial queda hacia atras.
+- **De donde salen los datos**: del MISMO streaming que ya alimenta el ladder, segun
+  el perfil elegido (Tradier con `timesale`, Alpaca con `trades`). No abre conexiones
+  nuevas ni gasta cupo de la API.
+- La cinta se limpia sola al cambiar de simbolo en el ladder.
+
+---
+
 ## 4. Monitoreo
 
 - **Posiciones**, **Ordenes abiertas**, **Ejecutadas**, **Canceladas** (con conteos y

@@ -33,7 +33,17 @@
 - **Fase 6 - Robustez en vivo (ANTES de operar con dinero real):**
   - [HECHO] Contador de strikes: si una orden es rechazada/falla `max_strikes` (3) veces SEGUIDAS, el bot se detiene solo (ABORTED), deja la posicion como esta y avisa. La capa `_safe_order`/`_safe_read` del motor evita que la app se caiga ante errores del broker; si se pierde la conexion (muchas lecturas fallidas seguidas) tambien frena. Sonido del sistema al frenar/pasar a manual (beep en las alertas "***"). Todo en `engine.py` + `gui/control_panel.py`.
   - FALTA (refinamientos): un rechazo de un simbolo puntual (bloqueado / no shorteable) que SALTEE ese simbolo en vez de sumar strike; deteccion de cotizaciones "pisadas"/viejas (por antiguedad del timestamp); recuperar/avisar una posicion abierta al reabrir la app tras un cierre inesperado; ordenes "fantasma" (cancelar y llenarse al mismo tiempo); sonido con un .wav propio en vez del beep del sistema.
-- **Time & Sales (la "cinta" de trades ejecutados):** panel con hora/precio/tamano de cada operacion. Se obtiene del streaming de Tradier (evento "timesale", requiere token de produccion). Sumarlo cuando montemos el streaming (Fase 4). Cuidado con el volumen de mensajes: limitar a las ultimas N filas, actualizar en lote y procesar en hilo aparte. La app de Marian ya lo tenia.
+- **Time & Sales:** [HECHO 29/07/2026] panel a la derecha del ladder (Hora/Precio/
+  Cantidad/Exchange, color segun el agresivo). Usa el streaming ya abierto del perfil
+  (Tradier `timesale` / Alpaca `trades`). No agrupa prints; volcado en lotes de 150 ms
+  y tope de 500 filas. Ver MANUAL.md seccion 3b.
+- **Overnight (Blue Ocean ATS):** PENDIENTE. Alpaca con Algo Trader Plus SI da el
+  overnight, pero en un feed aparte: `boats` (REST `feed=boats`, streaming
+  `wss://stream.data.alpaca.markets/v1beta1/boats`, exchange `B`). Verificado en vivo
+  el 29/07/2026 (quotes y trades reales a las 22:35 ET, cuando SIP ya no da nada).
+  Tradier NO tiene overnight. Falta: que la app elija el feed segun el horario para
+  ver el ladder y la cinta en la sesion nocturna.
+- **Time & Sales (descripcion original):** panel con hora/precio/tamano de cada operacion. Se obtiene del streaming de Tradier (evento "timesale", requiere token de produccion). Sumarlo cuando montemos el streaming (Fase 4). Cuidado con el volumen de mensajes: limitar a las ultimas N filas, actualizar en lote y procesar en hilo aparte. La app de Marian ya lo tenia.
 - **Aviso sonoro al pasar a manual:** ademas del cartel/notificacion, un ruido cuando el bot pasa a manual (sea por el guardia o porque no pudo cerrar con los 4 niveles). Necesita la pantalla (Fase 5).
 - **Odd lots dentro del spread (PENDIENTE, tomar con pinzas):** el NBBO (1er nivel) lo fijan los lotes de 100+ acciones, pero dentro del spread puede haber bids/asks chicos (odd lots) que no marcan el NBBO. Ej.: NBBO 100.00 x 100.20 pero un odd lot de 80 acciones en 100.07 -> quizas no convenga postear 50 acciones debajo de 100.07. Muchos brokers no los muestran. CONFIRMADO: Tradier es Level 1 y NO envia odd lots (no aparecen en el stream ni en el REST); no se pueden mostrar con su API. Requeriria un feed Level 2 / de profundidad de otro proveedor.
 

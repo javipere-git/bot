@@ -13,6 +13,8 @@ from ..connectors.tradier_stream import TradierMarketStream
 
 class StreamWorker(QObject):
     quote = Signal(str, float, float, float, float)
+    # Time & Sales: simbolo, precio, cantidad, exchange, hora (epoch)
+    trade = Signal(str, float, float, str, float)
 
     def __init__(self, stream: TradierMarketStream) -> None:
         super().__init__()
@@ -27,7 +29,7 @@ class StreamWorker(QObject):
         if not sym:
             return
         if not self._started:
-            self._stream.start([sym], self.quote.emit)
+            self._stream.start([sym], self.quote.emit, self.trade.emit)
             self._started = True
         else:
             self._stream.set_symbols([sym])

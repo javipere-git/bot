@@ -33,6 +33,7 @@ class TradierMarketStream:
         self._token = token
         self._symbols: list[str] = []
         self._on_quote: Callable | None = None
+        self._on_trade: Callable | None = None   # Time & Sales (filtro 'timesale')
         self._ws = None
         self._sessionid = None
         self._thread = None
@@ -55,9 +56,10 @@ class TradierMarketStream:
         return cls(token)
 
     # ---------- control ----------
-    def start(self, symbols, on_quote: Callable) -> None:
+    def start(self, symbols, on_quote: Callable, on_trade: Callable | None = None) -> None:
         self._symbols = list(symbols)
         self._on_quote = on_quote
+        self._on_trade = on_trade
         self._stop = False
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
@@ -95,10 +97,13 @@ class TradierMarketStream:
         return r.json()["stream"]["sessionid"]
 
     def _payload(self) -> str:
+        # 'timesale' = las operaciones ejecutadas (Time & Sales). Solo se pide si
+        # alguien las escucha, para no recibir mensajes al pedo.
+        filtros = ["quote"] + (["timesale"] if self._on_trade else [])
         return json.dumps({
             "symbols": self._symbols,
             "sessionid": self._sessionid,
-            "filter": ["quote"],
+            "filter": filtros,
             "linebreak": True,
         })
 
@@ -144,7 +149,11 @@ class TradierMarketStream:
             data = json.loads(line)
         except Exception:
             return
-        if data.get("type") != "quote":
+        tipo = data.get("type")
+        if tipo == "timesale":
+            self._handle_timesale(data)
+            return
+        if tipo != "quote":
             return
         sym = data.get("symbol")
         if not sym or self._on_quote is None:
@@ -157,3 +166,26 @@ class TradierMarketStream:
         except (TypeError, ValueError):
             return
         self._on_quote(sym, bid, ask, bidsz, asksz)
+
+    def _handle_timesale(self, data: dict) -> None:
+        """Una operacion ejecutada (Time & Sales).
+
+        Mensaje de Tradier: {"type":"timesale","symbol":...,"exch":"Q","bid":...,
+        "ask":...,"last":...,"size":...,"date":<ms>,"seq":...,"cancel":false,
+        "correction":false,"session":"normal"}. Las canceladas/corregidas se ignoran."""
+        if self._on_trade is None:
+            return
+        if data.get("cancel") or data.get("correction"):
+            return
+        sym = data.get("symbol")
+        if not sym:
+            return
+        try:
+            precio = float(data.get("last") or 0)
+            cant = float(data.get("size") or 0)
+            epoch = float(data.get("date") or 0) / 1000.0   # Tradier manda en ms
+        except (TypeError, ValueError):
+            return
+        if precio <= 0:
+            return
+        self._on_trade(sym, precio, cant, str(data.get("exch") or ""), epoch)

@@ -25,6 +25,7 @@ from .bot_runner import BotRunner
 from .monitor_panel import MonitorPanel
 from .market_worker import MarketWorker
 from .ladder_panel import LadderPanel
+from .tape_panel import TapePanel
 from .perfiles import Perfil
 from ..core.models import OrderStatus, Side
 from .sonidos import sonar_alerta, sonar_ejecucion
@@ -119,13 +120,16 @@ class MainWindow(QMainWindow):
             log=self.control.append_log,
         )
 
+        self.tape = TapePanel()
         splitter.addWidget(self.control)
         splitter.addWidget(self.monitor)
         splitter.addWidget(self.ladder)
+        splitter.addWidget(self.tape)
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
         splitter.setStretchFactor(2, 0)
-        splitter.setSizes([360, 480, 360])
+        splitter.setStretchFactor(3, 0)
+        splitter.setSizes([340, 420, 340, 240])
         outer.addWidget(splitter, 1)
 
         self.statusBar().showMessage("Listo - esqueleto de la pantalla (Fase 5).")
@@ -343,6 +347,9 @@ class MainWindow(QMainWindow):
             )
             return
         self._stream.quote.connect(self.ladder.actualizar_quote)
+        # Time & Sales: el mismo stream ya abierto trae las operaciones ejecutadas
+        self._stream.quote.connect(self.tape.actualizar_quote)
+        self._stream.trade.connect(self.tape.agregar_trade)
         self.control.append_log("Streaming en vivo activo (produccion, SOLO lectura de precios).")
 
     def _on_positions(self, positions) -> None:
@@ -389,6 +396,7 @@ class MainWindow(QMainWindow):
         self.lbl_conexion.setText(textos.get(estado, f"streaming: {estado}"))
 
     def _set_ladder_symbol(self, sym: str) -> None:
+        self.tape.set_symbol(sym)          # la cinta sigue al simbolo del ladder
         if self._stream is not None:
             self._stream.set_symbol(sym)                       # tiempo real (produccion)
         elif getattr(self, "_market_worker", None) is not None:

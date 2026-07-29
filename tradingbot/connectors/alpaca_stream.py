@@ -22,9 +22,24 @@ import json
 import os
 import threading
 import time
+from datetime import datetime
 from typing import Callable
 
 import websocket
+
+
+def _epoch(iso) -> float:
+    """Hora ISO de Alpaca -> segundos desde 1970 (para mostrarla en hora local)."""
+    try:
+        txt = str(iso)
+        if "." in txt:                       # recorta los nanosegundos
+            cabeza, resto = txt.split(".", 1)
+            txt = f"{cabeza}.{resto[:6].rstrip('Z')}+00:00"
+        else:
+            txt = txt.replace("Z", "+00:00")
+        return datetime.fromisoformat(txt).timestamp()
+    except Exception:  # noqa: BLE001
+        return time.time()
 
 
 class AlpacaMarketStream:
@@ -35,6 +50,7 @@ class AlpacaMarketStream:
         self._url = f"wss://stream.data.alpaca.markets/v2/{feed}"
         self._symbols: list[str] = []
         self._on_quote: Callable | None = None
+        self._on_trade: Callable | None = None   # Time & Sales (operaciones)
         self._ws = None
         self._thread = None
         self._stop = False
@@ -65,9 +81,10 @@ class AlpacaMarketStream:
         return cls(key, secret, feed)
 
     # ---------- control (mismo contrato que Tradier) ----------
-    def start(self, symbols, on_quote: Callable) -> None:
+    def start(self, symbols, on_quote: Callable, on_trade: Callable | None = None) -> None:
         self._symbols = list(symbols)
         self._on_quote = on_quote
+        self._on_trade = on_trade
         self._stop = False
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
@@ -82,9 +99,9 @@ class AlpacaMarketStream:
             # dar de baja los viejos y de alta los nuevos
             quitar = [s for s in anteriores if s not in nuevos]
             if quitar:
-                self._ws.send(json.dumps({"action": "unsubscribe", "quotes": quitar}))
+                self._ws.send(json.dumps(self._msg("unsubscribe", quitar)))
             if nuevos:
-                self._ws.send(json.dumps({"action": "subscribe", "quotes": nuevos}))
+                self._ws.send(json.dumps(self._msg("subscribe", nuevos)))
         except Exception:
             pass
 
@@ -100,6 +117,14 @@ class AlpacaMarketStream:
         return self._conectado
 
     # ---------- interno ----------
+    def _msg(self, accion: str, simbolos: list) -> dict:
+        """Mensaje de (des)suscripcion. Solo pide 'trades' si alguien escucha el
+        Time & Sales, para no recibir mensajes al pedo."""
+        m = {"action": accion, "quotes": list(simbolos)}
+        if self._on_trade:
+            m["trades"] = list(simbolos)
+        return m
+
     def _run(self) -> None:
         while not self._stop:
             try:
@@ -112,9 +137,7 @@ class AlpacaMarketStream:
                 if not self._espera_auth():
                     raise RuntimeError("Alpaca stream: autenticacion rechazada")
                 if self._symbols:
-                    self._ws.send(json.dumps(
-                        {"action": "subscribe", "quotes": self._symbols}
-                    ))
+                    self._ws.send(json.dumps(self._msg("subscribe", self._symbols)))
                 self._conectado = True
                 while not self._stop:
                     try:
@@ -163,19 +186,29 @@ class AlpacaMarketStream:
         return data if isinstance(data, list) else [data]
 
     def _handle(self, msg) -> None:
-        if self._on_quote is None:
-            return
         for item in self._items(msg):
-            if item.get("T") != "q":   # solo quotes
-                continue
+            tipo = item.get("T")
             sym = item.get("S")
             if not sym:
                 continue
-            try:
-                bid = float(item.get("bp") or 0)
-                ask = float(item.get("ap") or 0)
-                bidsz = float(item.get("bs") or 0)
-                asksz = float(item.get("as") or 0)
-            except (TypeError, ValueError):
-                continue
-            self._on_quote(sym, bid, ask, bidsz, asksz)
+            if tipo == "q" and self._on_quote is not None:
+                try:
+                    bid = float(item.get("bp") or 0)
+                    ask = float(item.get("ap") or 0)
+                    bidsz = float(item.get("bs") or 0)
+                    asksz = float(item.get("as") or 0)
+                except (TypeError, ValueError):
+                    continue
+                self._on_quote(sym, bid, ask, bidsz, asksz)
+            elif tipo == "t" and self._on_trade is not None:
+                # operacion ejecutada: {"T":"t","S":sym,"p":precio,"s":cant,
+                #  "x":exchange,"t":"2026-07-29T02:35:54.123Z"}
+                try:
+                    precio = float(item.get("p") or 0)
+                    cant = float(item.get("s") or 0)
+                except (TypeError, ValueError):
+                    continue
+                if precio <= 0:
+                    continue
+                self._on_trade(sym, precio, cant, str(item.get("x") or ""),
+                               _epoch(item.get("t")))
