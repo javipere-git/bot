@@ -150,12 +150,14 @@ class LadderPanel(QWidget):
         fila_sym.addWidget(QLabel("Simbolo:"))
         self.ed_symbol = QLineEdit()
         self.ed_symbol.setPlaceholderText("ej. SPY")
+        self.ed_symbol.setMaximumWidth(110)
         self.ed_symbol.returnPressed.connect(self._cambiar_symbol)
         fila_sym.addWidget(self.ed_symbol)
         self.btn_set = QPushButton("Ver")
         self.btn_set.setMaximumWidth(50)
         self.btn_set.clicked.connect(self._cambiar_symbol)
         fila_sym.addWidget(self.btn_set)
+        fila_sym.addStretch()
         lay.addLayout(fila_sym)
 
         # --- NBBO grande (bid / ask bien visibles) ---
@@ -192,8 +194,8 @@ class LadderPanel(QWidget):
             b.setMaximumWidth(38)
             b.clicked.connect(lambda _=False, v=s: self.spin_size.setValue(v))
             fila_size.addWidget(b)
-        fila_size.addStretch()
         fila_size.addWidget(self.chk_ext)
+        fila_size.addStretch()
         lay.addLayout(fila_size)
 
         # --- zoom (paso de la escalera) ---
@@ -217,11 +219,11 @@ class LadderPanel(QWidget):
         self.btn_center.setToolTip("Volver a centrar la escalera en el bid/ask")
         self.btn_center.clicked.connect(self._centrar)
         fila_zoom.addWidget(self.btn_center)
-        fila_zoom.addStretch()
         self.btn_cancel_all = QPushButton("Cancelar todo")
         self.btn_cancel_all.setToolTip("Cancela TODAS las ordenes abiertas de la cuenta")
         self.btn_cancel_all.clicked.connect(self._cancelar_todas)
         fila_zoom.addWidget(self.btn_cancel_all)
+        fila_zoom.addStretch()
         lay.addLayout(fila_zoom)
 
         # --- botones marketables ---
