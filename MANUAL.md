@@ -249,9 +249,12 @@ la posicion este cerrada. (Si ya estabas mirando ese mismo simbolo, no se toca n
   las ordenes manuales del ladder. Tildado = puede ejecutarse fuera de la rueda
   regular (incluido el overnight en Alpaca). Destildado = si el mercado esta cerrado,
   la orden espera a la apertura.
-- **Columnas**: en TODAS las tablas de la app (monitoreo, ladder y Time & Sales) se
-  puede ajustar el ancho de cada columna arrastrando el borde del encabezado, y
-  cambiarlas de lugar arrastrando el titulo.
+- **Columnas (en TODAS las tablas de la app)**: al abrir, las columnas se reparten el
+  ancho disponible y entran todas. Podes ajustar el ancho arrastrando el borde del
+  encabezado y cambiarlas de lugar arrastrando el titulo. **Como las dejes se
+  RECUERDA**: al reabrir la app vuelven a estar igual (se guarda por maquina al
+  cerrar). Si alguna vez queda rara la disposicion, se puede volver a cero borrando
+  el estado guardado (funcion `olvidar_columnas()` en `gui/estado_ui.py`).
 - **"Cancelar todo"**: cancela TODAS las ordenes abiertas de la cuenta (util si el
   precio se mueve rapido y cuesta encontrar la orden en la escalera).
 - El BID/ASK grandes arriba muestran el NBBO claramente.

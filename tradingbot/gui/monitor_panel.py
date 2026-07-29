@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..core.models import OrderStatus
+from .estado_ui import preparar_columnas
 from .widgets import CollapsibleSection
 
 
@@ -80,12 +81,12 @@ class MonitorPanel(QWidget):
         lay.addWidget(self.lbl_pnl_detalle)
 
         sec_pos = CollapsibleSection("Posiciones")
-        self.tbl_pos = self._tabla(["Simbolo", "Lado", "Cant", "Prom"])
+        self.tbl_pos = self._tabla(["Simbolo", "Lado", "Cant", "Prom"], "posiciones")
         sec_pos.add_widget(self.tbl_pos)
         lay.addWidget(sec_pos, 1)
 
         sec_ord = CollapsibleSection("Ordenes abiertas")
-        self.tbl_ord = self._tabla(["Hora", "Simbolo", "Lado", "Cant", "Tipo", "Limite", "Estado"])
+        self.tbl_ord = self._tabla(["Hora", "Simbolo", "Lado", "Cant", "Tipo", "Limite", "Estado"], "abiertas")
         sec_ord.add_widget(self.tbl_ord)
         lay.addWidget(sec_ord, 1)
 
@@ -97,12 +98,12 @@ class MonitorPanel(QWidget):
         lay.addWidget(self.lbl_counts)
 
         sec_exec = CollapsibleSection("Ejecutadas")
-        self.tbl_exec = self._tabla(["Hora", "Simbolo", "Lado", "Cant", "Prom"])
+        self.tbl_exec = self._tabla(["Hora", "Simbolo", "Lado", "Cant", "Prom"], "ejecutadas")
         sec_exec.add_widget(self.tbl_exec)
         lay.addWidget(sec_exec, 1)
 
         sec_canc = CollapsibleSection("Canceladas")
-        self.tbl_canc = self._tabla(["Hora", "Simbolo", "Lado", "Cant", "Limite", "Estado"])
+        self.tbl_canc = self._tabla(["Hora", "Simbolo", "Lado", "Cant", "Limite", "Estado"], "canceladas")
         sec_canc.add_widget(self.tbl_canc)
         lay.addWidget(sec_canc, 1)
 
@@ -111,22 +112,15 @@ class MonitorPanel(QWidget):
             t.sortItems(0, Qt.DescendingOrder)
 
     @staticmethod
-    def _tabla(headers: list[str]) -> QTableWidget:
+    def _tabla(headers: list[str], clave: str = "tabla") -> QTableWidget:
         t = QTableWidget(0, len(headers))
         t.setHorizontalHeaderLabels(headers)
         t.verticalHeader().setVisible(False)
         t.setEditTriggers(QAbstractItemView.NoEditTriggers)
         t.setSelectionBehavior(QAbstractItemView.SelectRows)
-        # Interactive + ultima columna elastica: el usuario puede ajustar el ancho
-        # de cada columna a mano, y arrastrarlas para cambiarlas de lugar.
-        t.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
-        t.horizontalHeader().setStretchLastSection(True)
-        t.horizontalHeader().setSectionsMovable(True)
-        t.horizontalHeader().setMinimumSectionSize(24)
-        # Sin esto, al llenarse de ordenes la tabla exige cada vez mas ancho y el
-        # divisor no se puede angostar (le come el espacio al Time & Sales).
-        t.setMinimumWidth(0)
         t.setSortingEnabled(True)  # click en el encabezado = ordenar
+        # columnas: entran todas, ajustables, movibles y con memoria
+        preparar_columnas(t, clave)
         return t
 
     @staticmethod

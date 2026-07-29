@@ -406,6 +406,11 @@ class MainWindow(QMainWindow):
             self._market_worker.set_ladder_symbol(sym)         # respaldo: polling demorado
 
     def closeEvent(self, e) -> None:
+        # recordar como dejaste las columnas (anchos y orden) para la proxima vez
+        from .estado_ui import guardar_columnas
+        guardar_columnas(self.monitor.tbl_pos, self.monitor.tbl_ord,
+                         self.monitor.tbl_exec, self.monitor.tbl_canc,
+                         self.ladder.tabla, self.tape.tabla)
         if self._runner is not None:
             self._runner.stop()
         if self._thread is not None:

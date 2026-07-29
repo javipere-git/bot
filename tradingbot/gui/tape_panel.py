@@ -22,6 +22,7 @@ from datetime import datetime
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QBrush, QColor
+from .estado_ui import preparar_columnas
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QHeaderView,
@@ -72,12 +73,7 @@ class TapePanel(QWidget):
         self.tabla.verticalHeader().setVisible(False)
         self.tabla.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.tabla.setSelectionBehavior(QAbstractItemView.SelectRows)
-        cab = self.tabla.horizontalHeader()
-        cab.setSectionResizeMode(QHeaderView.Interactive)   # ancho ajustable a mano
-        cab.setStretchLastSection(True)
-        cab.setSectionsMovable(True)                        # columnas arrastrables
-        cab.setMinimumSectionSize(24)
-        self.tabla.setMinimumWidth(0)
+        preparar_columnas(self.tabla, "time_and_sales")
         self.tabla.setStyleSheet("font-size: 11px;")
         self.tabla.verticalHeader().setDefaultSectionSize(18)
         lay.addWidget(self.tabla, 1)

@@ -40,6 +40,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..core.models import OrderRequest, OrderType, Side
+from .estado_ui import preparar_columnas
 
 C_BUY, C_BID, C_PRICE, C_ASK, C_SELL = range(5)
 VERDE = QColor("#cdeccd")
@@ -207,19 +208,26 @@ class LadderPanel(QWidget):
         self.btn_center.clicked.connect(self._centrar)
         fila_zoom.addWidget(self.btn_center)
         fila_zoom.addStretch()
+        lay.addLayout(fila_zoom)
+
+        # Segunda fila: si van todos juntos, el panel exige ~630px de ancho minimo
+        # y no se puede angostar. Separados, baja a menos de la mitad.
+        fila_acc = QHBoxLayout()
         self.chk_ext = QCheckBox("Ext. hours")
+        self.chk_ext.setMinimumWidth(0)
         self.chk_ext.setToolTip(
             "TILDADO: la orden PUEDE ejecutarse fuera de la rueda regular\n"
             "(pre-market, post-market y overnight).\n"
             "DESTILDADO: si el mercado esta cerrado, la orden queda en cola y se\n"
             "ejecuta recien en la proxima apertura."
         )
-        fila_zoom.addWidget(self.chk_ext)
+        fila_acc.addWidget(self.chk_ext)
+        fila_acc.addStretch()
         self.btn_cancel_all = QPushButton("Cancelar todo")
         self.btn_cancel_all.setToolTip("Cancela TODAS las ordenes abiertas de la cuenta")
         self.btn_cancel_all.clicked.connect(self._cancelar_todas)
-        fila_zoom.addWidget(self.btn_cancel_all)
-        lay.addLayout(fila_zoom)
+        fila_acc.addWidget(self.btn_cancel_all)
+        lay.addLayout(fila_acc)
 
         # --- botones marketables ---
         fila_mkt = QHBoxLayout()
@@ -239,10 +247,7 @@ class LadderPanel(QWidget):
         self.tabla.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.tabla.setSelectionMode(QAbstractItemView.NoSelection)
         self.tabla.setStyleSheet("font-size: 11px;")
-        cab = self.tabla.horizontalHeader()
-        cab.setSectionResizeMode(QHeaderView.Interactive)   # ancho ajustable a mano
-        cab.setStretchLastSection(True)
-        cab.setSectionsMovable(True)                        # columnas arrastrables
+        preparar_columnas(self.tabla, "ladder")
         self.tabla.cellClicked.connect(self._click_celda)
         self.tabla.orderMoved.connect(self._mover_orden)
         lay.addWidget(self.tabla, 1)
