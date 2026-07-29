@@ -255,6 +255,10 @@ la posicion este cerrada. (Si ya estabas mirando ese mismo simbolo, no se toca n
   RECUERDA**: al reabrir la app vuelven a estar igual (se guarda por maquina al
   cerrar). Si alguna vez queda rara la disposicion, se puede volver a cero borrando
   el estado guardado (funcion `olvidar_columnas()` en `gui/estado_ui.py`).
+- **Ancho de cada seccion**: los divisores entre Control / Monitoreo / Ladder /
+  Time & Sales tambien se recuerdan: como los dejes, asi vuelven al abrir.
+- **Modo oscuro**: boton arriba a la izquierda, en el banner. Cambia toda la app y
+  la eleccion se recuerda.
 - **"Cancelar todo"**: cancela TODAS las ordenes abiertas de la cuenta (util si el
   precio se mueve rapido y cuesta encontrar la orden en la escalera).
 - El BID/ASK grandes arriba muestran el NBBO claramente.

@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QMainWindow,
     QMessageBox,
+    QPushButton,
     QSplitter,
     QVBoxLayout,
     QWidget,
@@ -27,6 +28,8 @@ from .market_worker import MarketWorker
 from .ladder_panel import LadderPanel
 from .tape_panel import TapePanel
 from .perfiles import Perfil
+from .estado_ui import guardar_columnas, guardar_splitter, restaurar_splitter
+from .tema import aplicar_tema, es_oscuro
 from ..core.models import OrderStatus, Side
 from .sonidos import sonar_alerta, sonar_ejecucion
 
@@ -98,6 +101,11 @@ class MainWindow(QMainWindow):
         self.lbl_conexion.setStyleSheet(
             "color: white; font-weight: bold; background: transparent;"
         )
+        self.btn_tema = QPushButton()
+        self.btn_tema.setMaximumWidth(120)
+        self.btn_tema.setToolTip("Cambiar entre modo claro y modo oscuro")
+        self.btn_tema.clicked.connect(self._cambiar_tema)
+        bl.addWidget(self.btn_tema)
         bl.addStretch()
         bl.addWidget(lbl_modo)
         bl.addStretch()
@@ -129,7 +137,9 @@ class MainWindow(QMainWindow):
         splitter.setStretchFactor(1, 1)
         splitter.setStretchFactor(2, 0)
         splitter.setStretchFactor(3, 0)
-        splitter.setSizes([340, 420, 340, 240])
+        splitter.setSizes([340, 400, 380, 240])
+        self._splitter = splitter
+        restaurar_splitter(splitter)      # como lo dejaste la vez pasada
         outer.addWidget(splitter, 1)
 
         self.statusBar().showMessage("Listo - esqueleto de la pantalla (Fase 5).")
@@ -154,6 +164,9 @@ class MainWindow(QMainWindow):
         self._conexion_timer.timeout.connect(self._actualizar_conexion)
         self._conexion_timer.start()
         self._actualizar_conexion()
+
+        aplicar_tema(es_oscuro())          # el tema que elegiste la vez pasada
+        self._actualizar_boton_tema()
 
     # ---------- control del bot (en hilo aparte) ----------
     def _iniciar(self) -> None:
@@ -386,6 +399,13 @@ class MainWindow(QMainWindow):
                     f"@ {o.price:.2f} ***"
                 )
 
+    def _cambiar_tema(self) -> None:
+        aplicar_tema(not es_oscuro())
+        self._actualizar_boton_tema()
+
+    def _actualizar_boton_tema(self) -> None:
+        self.btn_tema.setText("Modo claro" if es_oscuro() else "Modo oscuro")
+
     def _actualizar_conexion(self) -> None:
         if self._stream is None:
             self.lbl_conexion.setText("streaming: no disponible")
@@ -407,7 +427,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, e) -> None:
         # recordar como dejaste las columnas (anchos y orden) para la proxima vez
-        from .estado_ui import guardar_columnas
+        guardar_splitter(self._splitter)
         guardar_columnas(self.monitor.tbl_pos, self.monitor.tbl_ord,
                          self.monitor.tbl_exec, self.monitor.tbl_canc,
                          self.ladder.tabla, self.tape.tabla)

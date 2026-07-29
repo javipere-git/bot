@@ -170,6 +170,15 @@ class LadderPanel(QWidget):
         fila_nbbo.addWidget(self.lbl_ask)
         lay.addLayout(fila_nbbo)
 
+        self.chk_ext = QCheckBox("Ext. hours")
+        self.chk_ext.setMinimumWidth(0)
+        self.chk_ext.setToolTip(
+            "TILDADO: la orden PUEDE ejecutarse fuera de la rueda regular "
+            "(pre-market, post-market y overnight).\n"
+            "DESTILDADO: si el mercado esta cerrado, la orden queda en cola y se "
+            "ejecuta recien en la proxima apertura."
+        )
+
         # --- cantidad (size) ---
         fila_size = QHBoxLayout()
         fila_size.addWidget(QLabel("Cant:"))
@@ -184,6 +193,7 @@ class LadderPanel(QWidget):
             b.clicked.connect(lambda _=False, v=s: self.spin_size.setValue(v))
             fila_size.addWidget(b)
         fila_size.addStretch()
+        fila_size.addWidget(self.chk_ext)
         lay.addLayout(fila_size)
 
         # --- zoom (paso de la escalera) ---
@@ -208,26 +218,11 @@ class LadderPanel(QWidget):
         self.btn_center.clicked.connect(self._centrar)
         fila_zoom.addWidget(self.btn_center)
         fila_zoom.addStretch()
-        lay.addLayout(fila_zoom)
-
-        # Segunda fila: si van todos juntos, el panel exige ~630px de ancho minimo
-        # y no se puede angostar. Separados, baja a menos de la mitad.
-        fila_acc = QHBoxLayout()
-        self.chk_ext = QCheckBox("Ext. hours")
-        self.chk_ext.setMinimumWidth(0)
-        self.chk_ext.setToolTip(
-            "TILDADO: la orden PUEDE ejecutarse fuera de la rueda regular\n"
-            "(pre-market, post-market y overnight).\n"
-            "DESTILDADO: si el mercado esta cerrado, la orden queda en cola y se\n"
-            "ejecuta recien en la proxima apertura."
-        )
-        fila_acc.addWidget(self.chk_ext)
-        fila_acc.addStretch()
         self.btn_cancel_all = QPushButton("Cancelar todo")
         self.btn_cancel_all.setToolTip("Cancela TODAS las ordenes abiertas de la cuenta")
         self.btn_cancel_all.clicked.connect(self._cancelar_todas)
-        fila_acc.addWidget(self.btn_cancel_all)
-        lay.addLayout(fila_acc)
+        fila_zoom.addWidget(self.btn_cancel_all)
+        lay.addLayout(fila_zoom)
 
         # --- botones marketables ---
         fila_mkt = QHBoxLayout()
@@ -453,6 +448,9 @@ class LadderPanel(QWidget):
             it.setFont(f)
         if bg is not None:
             it.setBackground(QBrush(bg))
+            # los fondos son pasteles claros: el texto va oscuro SIEMPRE, para que
+            # se lea igual en modo claro y en modo oscuro
+            it.setForeground(QBrush(QColor("#111111")))
         self.tabla.setItem(row, col, it)
 
     def _set_orden(self, row, col, datos) -> None:

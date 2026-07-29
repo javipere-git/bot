@@ -61,6 +61,25 @@ def guardar_columnas(*tablas) -> None:
             pass
 
 
+def guardar_splitter(splitter, clave: str = "principal") -> None:
+    """Guarda el ancho que le diste a cada seccion (bot / monitor / ladder / TAS)."""
+    try:
+        _AJUSTES.setValue(f"splitter/{clave}", splitter.saveState())
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def restaurar_splitter(splitter, clave: str = "principal") -> bool:
+    """Devuelve los anchos de secciones de la vez pasada. True si habia guardados."""
+    estado = _AJUSTES.value(f"splitter/{clave}")
+    if estado is None:
+        return False
+    try:
+        return bool(splitter.restoreState(estado))
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def olvidar_columnas() -> None:
     """Borra la disposicion guardada (por si quedo rara y se quiere empezar de cero)."""
     _AJUSTES.clear()
