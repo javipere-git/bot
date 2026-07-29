@@ -39,6 +39,7 @@ class MarketWorker(QObject):
         self._cache_ordenes: dict[str, object] = {}
         self._stop = False
         self._ladder_symbol = None
+        self._ladder_ya = False   # pedir el precio del ladder YA (cambio de simbolo)
 
     @Slot()
     def run(self) -> None:
@@ -64,19 +65,19 @@ class MarketWorker(QObject):
                 self.closed_orders.emit([o for o in todas if not o.is_active])
             except Exception as e:  # noqa: BLE001
                 self.error.emit(f"Monitoreo (ordenes): {e}")
-            sym = self._ladder_symbol
-            if sym:
-                try:
-                    q = self._broker.get_quote(sym)
-                    self.quote.emit(sym, float(q.bid or 0), float(q.ask or 0),
-                                    float(q.bid_size or 0), float(q.ask_size or 0))
-                except Exception as e:  # noqa: BLE001
-                    self.error.emit(f"Ladder (quote {sym}): {e}")
+            self._emitir_quote_ladder()
             # dormir en tramos cortos para poder cortar rapido al cerrar
             slept = 0.0
             while slept < self._interval and not self._stop:
                 time.sleep(0.1)
                 slept += 0.1
+                # Si acaban de cargar un simbolo en el ladder, pedir su precio YA.
+                # Importante en acciones poco liquidas: el streaming solo manda datos
+                # cuando el precio CAMBIA, asi que sin esto la escalera puede quedar
+                # vacia minutos (comprobado: 45s sin un solo quote en KPLT y SFBC).
+                if self._ladder_ya:
+                    self._ladder_ya = False
+                    self._emitir_quote_ladder()
 
     def _resultado_del_dia(self, posiciones):
         """Resultado del DIA (realizado + abierto) tal como lo informa el broker.
@@ -88,6 +89,19 @@ class MarketWorker(QObject):
         except Exception:  # noqa: BLE001
             pass
         return DayPnL(realizado=0.0, no_realizado=self._pnl_no_realizado(posiciones))
+
+    def _emitir_quote_ladder(self) -> None:
+        """Precio del simbolo del ladder por REST. Es el respaldo del streaming:
+        lo mantiene fresco aunque la accion no se mueva."""
+        sym = self._ladder_symbol
+        if not sym:
+            return
+        try:
+            q = self._broker.get_quote(sym)
+            self.quote.emit(sym, float(q.bid or 0), float(q.ask or 0),
+                            float(q.bid_size or 0), float(q.ask_size or 0))
+        except Exception as e:  # noqa: BLE001
+            self.error.emit(f"Ladder (quote {sym}): {e}")
 
     def _pnl_no_realizado(self, posiciones) -> float:
         """Suma (precio actual - promedio) * cantidad de cada posicion abierta.
@@ -107,6 +121,7 @@ class MarketWorker(QObject):
 
     def set_ladder_symbol(self, sym) -> None:
         self._ladder_symbol = (sym or "").upper() or None
+        self._ladder_ya = True    # que lo pida en el acto, sin esperar el ciclo
 
     def stop(self) -> None:
         self._stop = True

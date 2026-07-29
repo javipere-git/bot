@@ -221,6 +221,12 @@ la posicion este cerrada. (Si ya estabas mirando ese mismo simbolo, no se toca n
 - Escribir simbolo + **Ver**. La escalera se centra sola en el bid/ask.
 - **Carga automatica**: si el bot deja una posicion para cerrar a mano, el simbolo se
   carga aca solo (ver "Cuando el bot pasa a manual").
+- **De donde saca el precio** (arreglado el 29/07/2026): al cargar un simbolo, la
+  escalera pide el precio por REST **en el acto** y lo refresca cada ciclo; el
+  streaming se suma encima para el tiempo real. Antes dependia SOLO del streaming, y
+  como este manda datos unicamente cuando el precio CAMBIA, en acciones poco liquidas
+  la escalera podia quedar vacia varios minutos (medido: 45 segundos sin un solo
+  quote en KPLT y SFBC, mientras que por REST tardaban 0.2 segundos).
 - **CONGELADA con el mouse encima** (como ThinkorSwim): mientras el cursor esta sobre
   la escalera, **los precios quedan clavados en su fila**. Es una proteccion al click:
   sin esto, si el precio se mueve justo cuando vas a clickear, la fila cambia de precio

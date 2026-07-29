@@ -421,9 +421,13 @@ class MainWindow(QMainWindow):
     def _set_ladder_symbol(self, sym: str) -> None:
         self.tape.set_symbol(sym)          # la cinta sigue al simbolo del ladder
         if self._stream is not None:
-            self._stream.set_symbol(sym)                       # tiempo real (produccion)
-        elif getattr(self, "_market_worker", None) is not None:
-            self._market_worker.set_ladder_symbol(sym)         # respaldo: polling demorado
+            self._stream.set_symbol(sym)                       # tiempo real
+        # SIEMPRE tambien por REST: el streaming solo manda datos cuando el precio
+        # cambia, asi que en acciones poco liquidas la escalera puede tardar minutos
+        # en aparecer (o no aparecer). El pedido por REST la llena al instante y la
+        # mantiene fresca; el streaming sigue dando el tiempo real cuando hay movimiento.
+        if getattr(self, "_market_worker", None) is not None:
+            self._market_worker.set_ladder_symbol(sym)
 
     def closeEvent(self, e) -> None:
         # recordar como dejaste las columnas (anchos y orden) para la proxima vez
