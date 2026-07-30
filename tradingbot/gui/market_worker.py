@@ -47,6 +47,11 @@ class MarketWorker(QObject):
         # llamadas y agote el cupo de la API.
         self._refrescar_ya = False
         self._ultimo_refresco = 0.0
+        # Mientras el bot ESCANEA la watchlist (mete place+modify rapido), se apagan
+        # los refrescos por aviso: generarian una tormenta de llamadas y agotarian el
+        # cupo de la API (200/min en Alpaca). El monitoreo periodico (cada pocos seg)
+        # alcanza de sobra ahi. Los avisos instantaneos son para operar A MANO.
+        self._bot_escaneando = False
 
     @Slot()
     def run(self) -> None:
@@ -71,8 +76,9 @@ class MarketWorker(QObject):
                 if self._ladder_ya:
                     self._ladder_ya = False
                     self._emitir_quote_ladder()
-                # aviso del broker: refrescar ordenes YA (con el freno de MIN_REFRESCO)
-                if self._refrescar_ya:
+                # aviso del broker: refrescar YA (con el freno de MIN_REFRESCO), salvo
+                # que el bot este escaneando la watchlist (ahi seria una tormenta)
+                if self._refrescar_ya and not self._bot_escaneando:
                     if time.monotonic() - self._ultimo_refresco >= self.MIN_REFRESCO:
                         self._refrescar_ya = False
                         self._emitir_ordenes()
@@ -103,6 +109,11 @@ class MarketWorker(QObject):
     def refrescar_ya(self) -> None:
         """Lo llama la ventana cuando el broker avisa que una orden cambio."""
         self._refrescar_ya = True
+
+    def set_bot_escaneando(self, valor: bool) -> None:
+        """La ventana avisa si el bot esta escaneando la watchlist. Mientras lo este,
+        se ignoran los refrescos por aviso (evita agotar el cupo de la API)."""
+        self._bot_escaneando = bool(valor)
 
     def _resultado_del_dia(self, posiciones):
         """Resultado del DIA (realizado + abierto) tal como lo informa el broker.

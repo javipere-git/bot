@@ -436,7 +436,18 @@ Medido: el aviso llega en **~170-200 ms** (antes hasta 4.000 ms). En el registro
 aparece "Avisos de cuenta activos" al abrir; si el broker no los ofrece (Tradier
 sandbox), avisa que se refresca por sondeo.
 
-**Freno**: como maximo un refresco cada 0,4 segundos. Sin esto, una rafaga de ordenes
+**Freno doble** (importante, aprendido de un 429 real en Alpaca LIVE el 30/07/2026):
+1. Como maximo un refresco cada 0,4 segundos.
+2. **Mientras el bot ESCANEA la watchlist** (mete place+modify rapido, generando una
+   tormenta de avisos), los refrescos por aviso se **APAGAN**: ahi el monitoreo
+   periodico alcanza, y si no se agotaria el cupo de la API (200/min en Alpaca).
+   Se vuelven a encender apenas el bot pasa a MANUAL (que es cuando VOS operas y
+   necesitas ver las ordenes al instante). En linea con "cuando va con el bot la
+   velocidad la maneja el".
+
+Sin esto, con el bot recorriendo la watchlist a ~12 simbolos/min, los avisos
+instantaneos sumaban ~96 llamadas/min que, con el resto, cruzaban las 200/min y
+frenaban el bot por seguridad. Sin esto, una rafaga de ordenes
 del bot dispararia decenas de llamadas y agotaria el cupo de la API.
 
 ---

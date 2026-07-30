@@ -271,6 +271,7 @@ class MainWindow(QMainWindow):
         self._thread.started.connect(self._runner.run)
         self._thread.start()
         self._set_running(True)
+        self._bot_escaneando(True)
 
     def _detener(self) -> None:
         if self._runner is not None:
@@ -280,11 +281,13 @@ class MainWindow(QMainWindow):
     def _pausar(self) -> None:
         if self._runner is not None:
             self._runner.pause()
+            self._bot_escaneando(False)         # el usuario opera a mano: avisos ON
             self.control.append_log("Pausado (entre simbolos).")
 
     def _reanudar(self) -> None:
         if self._runner is not None:
             self._runner.resume()
+            self._bot_escaneando(True)          # vuelve a recorrer la watchlist
             self.control.append_log("Reanudado.")
 
     def _on_manual(self, sym: str, por_guardia: bool = False) -> None:
@@ -295,6 +298,7 @@ class MainWindow(QMainWindow):
         if not sym:
             return
         self.ladder.cargar_symbol(sym)
+        self._bot_escaneando(False)             # ahora operas a mano: avisos instantaneos ON
         self.control.append_log(f"Ladder: cargue {sym} solo (quedo para cerrar a mano).")
         if por_guardia and self.control.chk_guard_alarma.isChecked():
             self._alarma_guardia(sym)
@@ -326,6 +330,14 @@ class MainWindow(QMainWindow):
         self._thread = None
         self._runner = None
         self._set_running(False)
+        self._bot_escaneando(False)
+
+    def _bot_escaneando(self, valor: bool) -> None:
+        """Le avisa al monitoreo si el bot esta escaneando la watchlist. Mientras lo
+        este, se apagan los refrescos por aviso (si no, con el bot metiendo ordenes
+        rapido se agota el cupo de la API). En manual quedan activos."""
+        if getattr(self, "_market_worker", None) is not None:
+            self._market_worker.set_bot_escaneando(valor)
 
     def _set_running(self, running: bool) -> None:
         self.control.btn_iniciar.setEnabled(not running)
