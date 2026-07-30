@@ -78,6 +78,7 @@ class BotEngine:
         clock: object | None = None,
         log: Callable[[str], None] | None = None,
         on_manual: Callable[[str], None] | None = None,
+        observador=None,
     ) -> None:
         self._broker = broker
         self._cfg = config
@@ -97,6 +98,7 @@ class BotEngine:
         # es la referencia del guardia con GuardReference.ENTRY_CALC
         self._entry_ref: float | None = None
         self._baseline_vigilancia: float | None = None
+        self._observador = observador   # cuenta los cambios de bid/ask (del streaming)
 
     # ===================== control =====================
     def stop(self) -> None:
@@ -356,6 +358,8 @@ class BotEngine:
             return None
         if not self._volume_ok(quote.volume):
             self._log(f"{sym}: volumen del dia {quote.volume:,} fuera de rango -> salteo")
+            return None
+        if not self._movimiento_ok(sym):
             return None
 
         price1 = self._entry_price(quote, self._cfg.order1)
@@ -669,6 +673,44 @@ class BotEngine:
         if unit == OffsetUnit.DOLLARS:
             return offset
         return (offset / 100.0) * quote.spread
+
+    def _movimiento_ok(self, sym: str) -> bool:
+        """Filtro de movimiento: cuantas veces se movio el bid/ask en los ultimos
+        segundos. Se mide SIEMPRE hacia atras desde AHORA (ventana deslizante), o sea
+        justo antes de operar este simbolo, no desde que arranco la watchlist.
+
+        Si todavia no hay ventana completa (recien arranco el bot), ESPERA lo que
+        falte: mejor demorar unos segundos que decidir con datos incompletos. Eso
+        pasa una sola vez, con los primeros simbolos.
+        """
+        tope = self._cfg.max_cambios_bid_ask
+        if tope is None or self._observador is None:
+            return True
+        ventana = max(1.0, float(self._cfg.ventana_cambios_s))
+
+        falta = ventana - self._observador.observando_hace(sym)
+        if falta > 0:
+            self._log(
+                f"{sym}: espero {falta:.0f}s para tener los {ventana:.0f}s de "
+                f"movimiento del bid/ask..."
+            )
+            fin = self._clock.now() + falta
+            while self._clock.now() < fin:
+                if self._stopped or self._abort:
+                    return False
+                self._clock.sleep(min(0.2, fin - self._clock.now()))
+
+        cambios = self._observador.cambios(sym, ventana)
+        if cambios > tope:
+            self._log(
+                f"{sym}: el bid/ask se movio {cambios} veces en {ventana:.0f}s "
+                f"(tope {tope}) -> salteo, demasiado nervioso"
+            )
+            return False
+        self._log(
+            f"{sym}: movimiento del bid/ask {cambios} en {ventana:.0f}s (tope {tope}) -> OK"
+        )
+        return True
 
     def _spread_ok(self, spread: float) -> bool:
         if self._cfg.spread_min is not None and spread < self._cfg.spread_min:

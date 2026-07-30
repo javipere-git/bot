@@ -350,6 +350,42 @@ tiene su propio feed. Por eso:
 
 ---
 
+## 3a. Filtro de movimiento del bid/ask (29/07/2026)
+
+Campo **"Max cambios bid/ask: [X] en los ultimos [Y] segundos"**, al lado de los
+filtros de spread y volumen. Sirve para **saltear acciones nerviosas**: una que hace
+10 minutos esta clavada en 100.00 x 100.50 no es lo mismo que una que se mueve cada 2
+segundos.
+
+- Cuenta **cuantas VECES** se movio el precio del bid o del ask. **No** la magnitud.
+- Cuenta solo cambios de **PRECIO**: si cambia unicamente el tamano, no cuenta.
+- **VENTANA DESLIZANTE**: se mide justo ANTES de operar cada simbolo, mirando hacia
+  atras esos segundos. Si la watchlist arranca 12:00:00 y el bot llega al simbolo 30 a
+  las 12:20:00 con ventana de 30s, mira **desde las 12:19:30**, no desde el arranque.
+- Si se movio **MAS** veces que el tope, saltea el simbolo y sigue con el siguiente
+  (igual que spread y volumen).
+- **Vacio = filtro apagado** (no cambia nada de la operativa).
+
+**De donde salen los datos**: del **STREAMING**, que ya manda cada cambio de precio
+sin gastar llamadas a la API. Al iniciar el bot con este filtro activo, el streaming
+se suscribe a **toda la watchlist** (antes solo seguia el simbolo del ladder). Por eso
+**cuesta 0 llamadas y 0 demora**: el dato ya esta cuando el bot llega al simbolo.
+Hacerlo por REST seria imposible (~50 consultas por simbolo para mirar 10 segundos,
+con un cupo de 120/min en Tradier).
+
+**Los primeros simbolos**: si todavia no paso la ventana completa desde que arranco el
+streaming, el bot **ESPERA los segundos que falten** antes de decidir. Preferimos
+demorar unos segundos que decidir con datos incompletos. Pasa una sola vez, al inicio.
+
+**OJO con el feed**: el filtro depende de la calidad del streaming. Medido el
+29/07/2026 en el after-hours (cambios de bid/ask en 20s): Alpaca dio SPY 56 / AAPL 16,
+y Tradier 0 en todos (Tradier no parece streamear quotes fuera de la rueda; durante el
+dia si manda). Con Alpaca SIP el filtro discrimina perfecto: SPY 56 vs una iliquida 0.
+
+Test: `examples/demo_filtro_movimiento.py`.
+
+---
+
 ## 3b. El guardia vigila TAMBIEN en manual (29/07/2026)
 
 **Agujero que se arreglo** (lo encontro el usuario operando): si el **Cierre

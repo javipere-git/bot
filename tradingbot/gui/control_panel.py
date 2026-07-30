@@ -182,6 +182,29 @@ class ControlPanel(QWidget):
             "Los simbolos fuera del rango se saltean. Vacio = sin limite por ese lado."
         )
         form.addRow("Volumen dia:", caja_vol)
+
+        mov = QHBoxLayout()
+        self.ed_mov_max = QLineEdit()
+        self.ed_mov_max.setPlaceholderText("max")
+        self.ed_mov_max.setMaximumWidth(50)
+        self.ed_mov_seg = QLineEdit()
+        self.ed_mov_seg.setPlaceholderText("seg")
+        self.ed_mov_seg.setMaximumWidth(50)
+        mov.addWidget(self.ed_mov_max)
+        mov.addWidget(QLabel("en los ultimos"))
+        mov.addWidget(self.ed_mov_seg)
+        mov.addWidget(QLabel("segundos"))
+        caja_mov = self._wrap(mov)
+        caja_mov.setToolTip(
+            "Cuantas VECES se movio el precio del bid o del ask (no importa cuanto). "
+            "Sirve para saltear acciones nerviosas: una que hace 10 minutos esta "
+            "clavada en 100.00 x 100.50 no es lo mismo que una que se mueve cada 2 "
+            "segundos.\n\n"
+            "Se mide justo ANTES de operar cada simbolo, mirando hacia atras esos "
+            "segundos. Si se movio MAS veces que el tope, saltea el simbolo.\n\n"
+            "Necesita el streaming conectado. Vacio = filtro apagado."
+        )
+        form.addRow("Max cambios bid/ask:", caja_mov)
         return g
 
     def _grupo_opciones(self) -> QGroupBox:
@@ -387,6 +410,8 @@ class ControlPanel(QWidget):
             spread_min=self._parse_float(self.ed_spread_min.text()),
             spread_max=self._parse_float(self.ed_spread_max.text()),
             extended_hours=self.chk_ext.isChecked(),
+            max_cambios_bid_ask=self._parse_int(self.ed_mov_max.text()),
+            ventana_cambios_s=float(self._parse_int(self.ed_mov_seg.text()) or 30),
             volume_min=self._parse_int(self.ed_vol_min.text()),
             volume_max=self._parse_int(self.ed_vol_max.text()),
             exit_levels=exit_levels,

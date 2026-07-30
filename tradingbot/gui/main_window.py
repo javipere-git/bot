@@ -31,6 +31,7 @@ from .perfiles import Perfil
 from .estado_ui import guardar_columnas, guardar_splitter, restaurar_splitter
 from .tema import aplicar_tema, es_oscuro
 from ..core.models import OrderStatus, Side
+from ..core.observador_movimiento import ObservadorMovimiento
 from .sonidos import sonar_alerta, sonar_ejecucion
 
 import configparser
@@ -119,6 +120,7 @@ class MainWindow(QMainWindow):
         self._manual_broker = None  # canal para operar manual desde el ladder
         self._stream = None         # streaming de precios en vivo (produccion, solo lectura)
         self._avisos = None         # avisos de cuenta (orden puesta/ejecutada/cancelada)
+        self._observador = ObservadorMovimiento()   # cuenta cambios de bid/ask (filtro)
         self._closed_seen = None    # ids de ordenes cerradas ya vistas (sonido / rechazos)
         self._pos_warned = False    # para avisar UNA vez si hay posicion abierta al abrir
         self.control = ControlPanel()
@@ -250,7 +252,16 @@ class MainWindow(QMainWindow):
             f"Iniciando bot ({etiqueta}) con {len(symbols)} simbolo(s): {', '.join(symbols)}"
         )
         self._thread = QThread()
-        self._runner = BotRunner(broker, config, symbols)
+        # el streaming se suscribe a TODA la watchlist: asi el observador puede medir
+        # cuantas veces se movio el bid/ask de cada simbolo antes de que el bot llegue
+        if self._stream is not None and config.max_cambios_bid_ask is not None:
+            self._observador.observar(symbols)
+            self._stream.set_watchlist(symbols)
+            self.control.append_log(
+                f"Filtro de movimiento activo: sigo el bid/ask de {len(symbols)} "
+                f"simbolos por streaming."
+            )
+        self._runner = BotRunner(broker, config, symbols, observador=self._observador)
         self._runner.moveToThread(self._thread)
         self._runner.log.connect(self.control.append_log)
         self._runner.manual.connect(self._on_manual)
@@ -365,11 +376,16 @@ class MainWindow(QMainWindow):
                 f"{self._perfil.broker_nombre}: ladder por REST (streaming aun no cableado)."
             )
             return
+        self._stream.quote.connect(self._anotar_movimiento)
         self._stream.quote.connect(self.ladder.actualizar_quote)
         # Time & Sales: el mismo stream ya abierto trae las operaciones ejecutadas
         self._stream.quote.connect(self.tape.actualizar_quote)
         self._stream.trade.connect(self.tape.agregar_trade)
         self.control.append_log("Streaming en vivo activo (produccion, SOLO lectura de precios).")
+
+    def _anotar_movimiento(self, sym, bid, ask, *resto) -> None:
+        """Cada quote del streaming alimenta al observador de movimiento."""
+        self._observador.anotar(sym, bid, ask)
 
     def _arrancar_avisos(self) -> None:
         """Canal de avisos del broker: cuando una orden cambia de estado, refresca
