@@ -73,11 +73,14 @@ class EngineConfig:
     order2: OrderConfig | None = None
     spread_min: float | None = None     # filtro de spread en $ (None = sin limite)
     spread_max: float | None = None
-    # Filtro de MOVIMIENTO del bid/ask: cuantas veces se movio el precio en los
-    # ultimos segundos. Si se paso del tope, el bot saltea el simbolo (accion
-    # demasiado nerviosa). None = filtro apagado.
-    max_cambios_bid_ask: int | None = None
-    ventana_cambios_s: float = 30.0
+    # Filtro de MOVIMIENTO: cuantas veces se movio el precio en los ultimos segundos.
+    # Si se paso del tope, el bot saltea el simbolo (accion demasiado nerviosa).
+    # El bid y el ask van por separado, cada uno con su ventana; None = ese lado no
+    # filtra nada (se pueden usar los dos, uno solo, o ninguno).
+    max_cambios_bid: int | None = None
+    ventana_bid_s: float = 30.0
+    max_cambios_ask: int | None = None
+    ventana_ask_s: float = 30.0
     volume_min: int | None = None       # filtro de volumen operado en el dia, en
     volume_max: int | None = None       # acciones (None = sin limite por ese lado)
     duration: Duration = Duration.DAY   # por defecto DAY

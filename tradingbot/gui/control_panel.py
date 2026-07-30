@@ -183,29 +183,42 @@ class ControlPanel(QWidget):
         )
         form.addRow("Volumen dia:", caja_vol)
 
-        mov = QHBoxLayout()
-        self.ed_mov_max = QLineEdit()
-        self.ed_mov_max.setPlaceholderText("max")
-        self.ed_mov_max.setMaximumWidth(50)
-        self.ed_mov_seg = QLineEdit()
-        self.ed_mov_seg.setPlaceholderText("seg")
-        self.ed_mov_seg.setMaximumWidth(50)
-        mov.addWidget(self.ed_mov_max)
-        mov.addWidget(QLabel("en los ultimos"))
-        mov.addWidget(self.ed_mov_seg)
-        mov.addWidget(QLabel("segundos"))
-        caja_mov = self._wrap(mov)
-        caja_mov.setToolTip(
-            "Cuantas VECES se movio el precio del bid o del ask (no importa cuanto). "
-            "Sirve para saltear acciones nerviosas: una que hace 10 minutos esta "
-            "clavada en 100.00 x 100.50 no es lo mismo que una que se mueve cada 2 "
-            "segundos.\n\n"
-            "Se mide justo ANTES de operar cada simbolo, mirando hacia atras esos "
-            "segundos. Si se movio MAS veces que el tope, saltea el simbolo.\n\n"
-            "Necesita el streaming conectado. Vacio = filtro apagado."
+        AYUDA_MOV = (
+            "Cuantas VECES se movio ese precio (no importa cuanto). Sirve para "
+            "saltear acciones nerviosas: una que hace 10 minutos esta clavada en "
+            "100.00 x 100.50 no es lo mismo que una que se mueve cada 2 segundos.\n\n"
+            "Se mide justo ANTES de operar cada simbolo, contando los segundos "
+            "literalmente hacia atras desde ese momento. Si se movio MAS veces que "
+            "el tope, saltea el simbolo.\n\n"
+            "El bid y el ask van por separado: podes usar los dos, uno solo, o "
+            "ninguno. Vacio = ese lado no filtra nada.\n\n"
+            "Necesita el streaming conectado."
         )
-        form.addRow("Max cambios bid/ask:", caja_mov)
+        self.ed_mov_bid_max, self.ed_mov_bid_seg = self._fila_movimiento(
+            form, "Max cambios bid:", AYUDA_MOV
+        )
+        self.ed_mov_ask_max, self.ed_mov_ask_seg = self._fila_movimiento(
+            form, "Max cambios ask:", AYUDA_MOV
+        )
         return g
+
+    def _fila_movimiento(self, form, etiqueta: str, ayuda: str):
+        """Una linea del filtro de movimiento: [max] en los ultimos [seg] segundos."""
+        fila = QHBoxLayout()
+        ed_max = QLineEdit()
+        ed_max.setPlaceholderText("max")
+        ed_max.setMaximumWidth(50)
+        ed_seg = QLineEdit()
+        ed_seg.setPlaceholderText("seg")
+        ed_seg.setMaximumWidth(50)
+        fila.addWidget(ed_max)
+        fila.addWidget(QLabel("en los ultimos"))
+        fila.addWidget(ed_seg)
+        fila.addWidget(QLabel("segundos"))
+        caja = self._wrap(fila)
+        caja.setToolTip(ayuda)
+        form.addRow(etiqueta, caja)
+        return ed_max, ed_seg
 
     def _grupo_opciones(self) -> QGroupBox:
         g = QGroupBox("Opciones")
@@ -410,8 +423,10 @@ class ControlPanel(QWidget):
             spread_min=self._parse_float(self.ed_spread_min.text()),
             spread_max=self._parse_float(self.ed_spread_max.text()),
             extended_hours=self.chk_ext.isChecked(),
-            max_cambios_bid_ask=self._parse_int(self.ed_mov_max.text()),
-            ventana_cambios_s=float(self._parse_int(self.ed_mov_seg.text()) or 30),
+            max_cambios_bid=self._parse_int(self.ed_mov_bid_max.text()),
+            ventana_bid_s=float(self._parse_int(self.ed_mov_bid_seg.text()) or 30),
+            max_cambios_ask=self._parse_int(self.ed_mov_ask_max.text()),
+            ventana_ask_s=float(self._parse_int(self.ed_mov_ask_seg.text()) or 30),
             volume_min=self._parse_int(self.ed_vol_min.text()),
             volume_max=self._parse_int(self.ed_vol_max.text()),
             exit_levels=exit_levels,

@@ -683,16 +683,20 @@ class BotEngine:
         falte: mejor demorar unos segundos que decidir con datos incompletos. Eso
         pasa una sola vez, con los primeros simbolos.
         """
-        tope = self._cfg.max_cambios_bid_ask
-        if tope is None or self._observador is None:
+        obs = self._observador
+        tope_bid = self._cfg.max_cambios_bid
+        tope_ask = self._cfg.max_cambios_ask
+        if obs is None or (tope_bid is None and tope_ask is None):
             return True
-        ventana = max(1.0, float(self._cfg.ventana_cambios_s))
 
-        falta = ventana - self._observador.observando_hace(sym)
+        # cada lado con su ventana; se espera la mas larga de las que se usan
+        v_bid = max(1.0, float(self._cfg.ventana_bid_s)) if tope_bid is not None else 0.0
+        v_ask = max(1.0, float(self._cfg.ventana_ask_s)) if tope_ask is not None else 0.0
+        falta = max(v_bid, v_ask) - obs.observando_hace(sym)
         if falta > 0:
             self._log(
-                f"{sym}: espero {falta:.0f}s para tener los {ventana:.0f}s de "
-                f"movimiento del bid/ask..."
+                f"{sym}: espero {falta:.0f}s para tener la ventana completa de "
+                f"movimiento..."
             )
             fin = self._clock.now() + falta
             while self._clock.now() < fin:
@@ -700,16 +704,22 @@ class BotEngine:
                     return False
                 self._clock.sleep(min(0.2, fin - self._clock.now()))
 
-        cambios = self._observador.cambios(sym, ventana)
-        if cambios > tope:
-            self._log(
-                f"{sym}: el bid/ask se movio {cambios} veces en {ventana:.0f}s "
-                f"(tope {tope}) -> salteo, demasiado nervioso"
-            )
-            return False
-        self._log(
-            f"{sym}: movimiento del bid/ask {cambios} en {ventana:.0f}s (tope {tope}) -> OK"
-        )
+        partes = []
+        for lado, tope, ventana, contar in (
+            ("bid", tope_bid, v_bid, obs.cambios_bid),
+            ("ask", tope_ask, v_ask, obs.cambios_ask),
+        ):
+            if tope is None:
+                continue                      # ese lado no filtra nada
+            cambios = contar(sym, ventana)
+            if cambios > tope:
+                self._log(
+                    f"{sym}: el {lado} se movio {cambios} veces en {ventana:.0f}s "
+                    f"(tope {tope}) -> salteo, demasiado nervioso"
+                )
+                return False
+            partes.append(f"{lado} {cambios} en {ventana:.0f}s (tope {tope})")
+        self._log(f"{sym}: movimiento OK -> " + ", ".join(partes))
         return True
 
     def _spread_ok(self, spread: float) -> bool:
