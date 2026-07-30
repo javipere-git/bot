@@ -96,6 +96,7 @@ class BotEngine:
         # bid (largo) / ask (corto) usado para CALCULAR la ultima orden de entrada;
         # es la referencia del guardia con GuardReference.ENTRY_CALC
         self._entry_ref: float | None = None
+        self._baseline_vigilancia: float | None = None
 
     # ===================== control =====================
     def stop(self) -> None:
@@ -107,6 +108,47 @@ class BotEngine:
 
     def resume(self) -> None:
         self._resume.set()
+
+    def _vigilar_en_manual(self, sym: str, pos: Position) -> None:
+        """Espera a que cierres la posicion a mano y aprietes Reanudar, PERO mientras
+        espera el guardia sigue vigilando: si el precio se corre en contra, suena la
+        alerta igual, aunque ya este en manual.
+
+        Por que: podes no estar mirando la pantalla (te guiaste por la alerta de que
+        entro en posicion). Si el bid/ask se corre fuerte, hay que enterarse.
+
+        Nunca opera: SOLO avisa. Aca no hay cierre automatico configurado, asi que el
+        motor no manda ninguna orden por su cuenta; la decision sigue siendo tuya.
+        """
+        g = self._cfg.guard
+        baseline = self._baseline_vigilancia
+        vigila = g is not None and g.enabled and baseline is not None
+        if not vigila:
+            self._wait_if_paused()          # sin guardia: espera de siempre
+            return
+
+        self._log(
+            f"{sym}: vigilando en manual (guardia desde {baseline:.2f}). "
+            f"Si se corre en contra, suena la alarma."
+        )
+        avisado = False
+        proxima = 0.0
+        while not self._resume.is_set() and not self._stopped and not self._abort:
+            ahora = self._clock.now()
+            if not avisado and ahora >= proxima:
+                proxima = ahora + max(self._cfg.poll_interval_s, 0.5)
+                if self._is_flat(sym):
+                    self._log(f"{sym}: posicion cerrada, dejo de vigilar.")
+                    break
+                if self._check_guard(sym, pos, baseline) is not None:
+                    self._log(
+                        f"*** {sym}: GUARDIA (ya en manual) -> el precio se corrio en "
+                        f"contra. Miralo YA. ***"
+                    )
+                    self._avisar_manual(sym, por_guardia=True)
+                    avisado = True     # una sola alarma: no la repite en bucle
+            time.sleep(0.05)
+        self._wait_if_paused()
 
     def _wait_if_paused(self) -> None:
         while not self._resume.is_set() and not self._stopped and not self._abort:
@@ -234,7 +276,7 @@ class BotEngine:
                         f"para seguir con el siguiente simbolo."
                     )
                     self.pause()
-                    self._wait_if_paused()
+                    self._vigilar_en_manual(sym, pos)
                     if self._stopped:
                         return Outcome.STOPPED
                     if self._abort:
@@ -257,7 +299,7 @@ class BotEngine:
                         f"con el siguiente simbolo."
                     )
                     self.pause()
-                    self._wait_if_paused()
+                    self._vigilar_en_manual(sym, pos)
                     if self._stopped:
                         return Outcome.STOPPED
                     if self._abort:
@@ -377,9 +419,19 @@ class BotEngine:
             self._clock.sleep(self._cfg.wait_before_exit_s)
 
         baseline = self._elegir_baseline(sym, pos)
+        self._baseline_vigilancia = baseline   # para seguir vigilando ya en manual
         levels = [lv for lv in self._cfg.exit_levels if lv.enabled][:4]
         if not levels:
-            self._log(f"{sym}: no hay niveles de salida activos -> dejo la posicion abierta")
+            g = self._cfg.guard
+            if g is not None and g.enabled and baseline is not None:
+                self._log(
+                    f"{sym}: no hay niveles de salida activos -> paso a manual, "
+                    f"pero el GUARDIA sigue vigilando"
+                )
+            else:
+                self._log(
+                    f"{sym}: no hay niveles de salida activos -> dejo la posicion abierta"
+                )
             return Outcome.MANUAL_NO_EXIT
 
         exit_side = Side.SELL if pos.is_long else Side.BUY_TO_COVER

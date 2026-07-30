@@ -350,6 +350,32 @@ tiene su propio feed. Por eso:
 
 ---
 
+## 3b. El guardia vigila TAMBIEN en manual (29/07/2026)
+
+**Agujero que se arreglo** (lo encontro el usuario operando): si el **Cierre
+automatico estaba DESTILDADO**, el guardia NO funcionaba. El motor pasaba a manual y
+se quedaba esperando sin mirar el precio, porque el guardia vivia dentro del ciclo de
+los niveles de salida. Tenias la alarma tildada y no te protegia.
+
+**Ahora**: mientras el bot espera que cierres la posicion a mano y aprietes Reanudar,
+el guardia **sigue vigilando**. Si el precio se corre en contra del umbral, **suena la
+alarma igual**, aunque ya este en manual. Util cuando no estas mirando la pantalla y
+te guiaste solo por la alerta de que entro en posicion.
+
+Detalles:
+- **Suena UNA vez** por posicion, no en bucle (si sigue cayendo no vuelve a sonar).
+- Si **cerras la posicion a mano**, deja de vigilar sola.
+- Si el guardia no esta tildado, se comporta como antes (no vigila).
+- **NUNCA opera**: en este modo el motor no manda ninguna orden por su cuenta, solo
+  avisa. Aunque tengas el guardia en "salida forzada", en manual solo alerta (ver
+  LISTA_DE_DESEOS si se quiere cambiar).
+- La referencia es la misma que elegiste para el guardia (por defecto el precio con el
+  que se calculo la entrada).
+
+Test: `examples/demo_guardia_vigilando.py`.
+
+---
+
 ## 4a. Avisos instantaneos del broker (29/07/2026)
 
 Antes, la app se enteraba de que una orden se puso, se ejecuto o se cancelo recien
