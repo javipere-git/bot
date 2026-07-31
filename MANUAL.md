@@ -260,9 +260,20 @@ la posicion este cerrada. (Si ya estabas mirando ese mismo simbolo, no se toca n
 - **Boton "Centrar"** (al lado del zoom): fuerza el re-centrado en el bid/ask actual.
 - **Zoom** (+/-): cambia el paso de precio (0.01 / 0.02 / 0.05 / 0.10 / 0.25), util para
   acciones con spread amplio.
-- **Click en Compra/Venta** (celda vacia) = manda orden limite a ese precio.
+- **Como se manda una orden (modelo ThinkorSwim, desde el 30/07/2026)**:
+  - **MANDAR**: click en la columna **Bid** = COMPRA / click en la columna **Ask** =
+    VENTA, en la fila del precio que quieras.
+  - **CANCELAR**: click en tu orden (dibujada en las columnas Compra/Venta).
+  - **MOVER**: arrastrar tu orden a otra fila, igual que antes.
+
+  Antes las dos cosas se hacian en la MISMA celda y era facil equivocarse: darle a la
+  X queriendo mandar otra orden, mandar una queriendo cancelar, o soltar el mouse sin
+  llegar a arrastrar y mandar una sin querer. **Las columnas Compra/Venta ya NO mandan
+  ordenes: solo cancelan.**
 - **Tus ordenes** aparecen dibujadas en azul con "[X]"; click las cancela.
 - **Arrastrar** una orden a otro nivel = modifica su precio (no cancela y remanda).
+- **Botones de cantidad configurables**: la **rueda** al lado del ultimo boton abre un
+  cuadro para cambiar las cantidades de los cuatro. Se recuerdan.
 - **Marca amarilla** = tu precio promedio de la posicion.
 - **"Comprar al ask" / "Vender al bid"**: ordenes marketables al instante.
 - **Tilde "Ext. hours"** (al lado del zoom): mismo criterio que el del bot, pero para
