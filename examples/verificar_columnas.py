@@ -67,7 +67,12 @@ def main() -> None:
     olvidar_columnas()          # no dejar basura de la prueba
     print("\nOK: las columnas entran, se ajustan, se mueven y se recuerdan."
           if todo else "\n*** HAY FALLOS.")
+    return bool(todo)
 
 
 if __name__ == "__main__":
-    main()
+    # os._exit evita un choque de Qt al desarmar la aplicacion, que hacia que el
+    # script terminara con codigo de error aunque todas las pruebas pasaran.
+    ok = main()
+    sys.stdout.flush()
+    os._exit(0 if ok else 1)

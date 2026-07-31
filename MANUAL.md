@@ -275,6 +275,8 @@ la posicion este cerrada. (Si ya estabas mirando ese mismo simbolo, no se toca n
   RECUERDA**: al reabrir la app vuelven a estar igual (se guarda por maquina al
   cerrar). Si alguna vez queda rara la disposicion, se puede volver a cero borrando
   el estado guardado (funcion `olvidar_columnas()` en `gui/estado_ui.py`).
+- **Botones de cantidad configurables** (30/07/2026): la **rueda** al lado del ultimo
+  boton abre un cuadro para cambiar las cantidades de los cuatro. Se recuerdan.
 - **Ancho de cada seccion**: los divisores entre Control / Monitoreo / Ladder /
   Time & Sales tambien se recuerdan: como los dejes, asi vuelven al abrir.
 - **Modo oscuro**: boton arriba a la izquierda, en el banner. Cambia toda la app y

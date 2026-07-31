@@ -56,7 +56,12 @@ def main() -> None:
 
     print("OK: modo oscuro y memoria de secciones funcionan."
           if ok1 and ok2 else "*** HAY FALLOS.")
+    return bool(ok1 and ok2)
 
 
 if __name__ == "__main__":
-    main()
+    # os._exit evita un choque de Qt al desarmar la aplicacion, que hacia que el
+    # script terminara con codigo de error aunque todas las pruebas pasaran.
+    ok = main()
+    sys.stdout.flush()
+    os._exit(0 if ok else 1)

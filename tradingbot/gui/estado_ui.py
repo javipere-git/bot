@@ -83,3 +83,29 @@ def restaurar_splitter(splitter, clave: str = "principal") -> bool:
 def olvidar_columnas() -> None:
     """Borra la disposicion guardada (por si quedo rara y se quiere empezar de cero)."""
     _AJUSTES.clear()
+
+
+CANTIDADES_POR_DEFECTO = [10, 25, 50, 100]
+
+
+def cantidades_botones() -> list:
+    """Las cantidades de los 4 botones del ladder, como las dejaste la vez pasada."""
+    guardado = _AJUSTES.value("ladder/cantidades")
+    if not guardado:
+        return list(CANTIDADES_POR_DEFECTO)
+    try:
+        vals = [int(v) for v in guardado]
+    except (TypeError, ValueError):
+        return list(CANTIDADES_POR_DEFECTO)
+    vals = [v for v in vals if v > 0][:4]
+    # si quedaron menos de 4 (archivo viejo o corrupto), se completa con las de fabrica
+    while len(vals) < 4:
+        vals.append(CANTIDADES_POR_DEFECTO[len(vals)])
+    return vals
+
+
+def guardar_cantidades_botones(valores) -> None:
+    """Guarda las cantidades de los 4 botones del ladder."""
+    limpias = [int(v) for v in valores if int(v) > 0][:4]
+    if limpias:
+        _AJUSTES.setValue("ladder/cantidades", [str(v) for v in limpias])

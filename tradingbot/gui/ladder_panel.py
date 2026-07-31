@@ -27,6 +27,8 @@ from PySide6.QtGui import QBrush, QColor, QCursor
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
+    QDialog,
+    QDialogButtonBox,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -40,7 +42,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..core.models import OrderRequest, OrderType, Side
-from .estado_ui import preparar_columnas
+from .estado_ui import cantidades_botones, guardar_cantidades_botones, preparar_columnas
 
 C_BUY, C_BID, C_PRICE, C_ASK, C_SELL = range(5)
 VERDE = QColor("#cdeccd")
@@ -115,7 +117,8 @@ class LadderPanel(QWidget):
     MARGEN_NIVELES = 14
     MAX_FILAS = 600
     STEPS = [0.01, 0.02, 0.05, 0.10, 0.25]
-    AYUDA = "Click en Compra/Venta = orden; click en tu orden = cancelar."
+    AYUDA = ("Click en Bid = COMPRA / click en Ask = VENTA.  "
+             "Click en tu orden = cancelar; arrastrala para moverla.")
     STALE_SECS = 8    # segundos sin quote nuevo -> aviso "datos viejos"
 
     def __init__(
@@ -189,11 +192,22 @@ class LadderPanel(QWidget):
         self.spin_size.setValue(10)
         self.spin_size.setMaximumWidth(80)
         fila_size.addWidget(self.spin_size)
-        for s in (10, 25, 50, 100):
-            b = QPushButton(str(s))
+        self._botones_size = []
+        for _ in range(4):
+            b = QPushButton()
             b.setMaximumWidth(38)
-            b.clicked.connect(lambda _=False, v=s: self.spin_size.setValue(v))
+            # se conecta UNA sola vez: el boton lee su propio texto, asi cambiar las
+            # cantidades es solo cambiarles la etiqueta (sin reconectar señales)
+            b.clicked.connect(lambda _=False, bt=b: self._usar_cantidad(bt))
             fila_size.addWidget(b)
+            self._botones_size.append(b)
+        self._cargar_cantidades()
+
+        btn_cfg = QPushButton("⚙")          # rueda de configuracion
+        btn_cfg.setMaximumWidth(26)
+        btn_cfg.setToolTip("Cambiar las cantidades de los cuatro botones")
+        btn_cfg.clicked.connect(self._configurar_cantidades)
+        fila_size.addWidget(btn_cfg)
         fila_size.addWidget(self.chk_ext)
         fila_size.addStretch()
         lay.addLayout(fila_size)
@@ -478,16 +492,58 @@ class LadderPanel(QWidget):
             return None
 
     def _click_celda(self, row, col) -> None:
-        if col not in (C_BUY, C_SELL):
-            return
-        it = self.tabla.item(row, col)
-        ids = it.data(Qt.UserRole) if it is not None else None
-        if ids:
-            self._cancelar(ids)
-            return
-        precio = self._precio_de_fila(row)
-        if precio is not None:
-            self._mandar(Side.BUY if col == C_BUY else Side.SELL, precio)
+        """Modelo ThinkorSwim, para no mezclar mandar con cancelar:
+          - MANDAR: click en la columna BID (compra) o ASK (venta).
+          - CANCELAR: click en tu orden, que vive en las columnas Compra/Venta.
+        Antes las dos cosas se hacian en la misma celda y era facil equivocarse
+        (darle a la X queriendo mandar otra, o mandar una queriendo cancelar)."""
+        if col in (C_BUY, C_SELL):
+            it = self.tabla.item(row, col)
+            ids = it.data(Qt.UserRole) if it is not None else None
+            if ids:
+                self._cancelar(ids)
+            return                      # esas columnas YA NO mandan ordenes
+        if col in (C_BID, C_ASK):
+            precio = self._precio_de_fila(row)
+            if precio is not None:
+                self._mandar(Side.BUY if col == C_BID else Side.SELL, precio)
+
+    def _usar_cantidad(self, boton) -> None:
+        try:
+            self.spin_size.setValue(int(boton.text()))
+        except ValueError:
+            pass
+
+    def _cargar_cantidades(self) -> None:
+        """Pone en los cuatro botones las cantidades guardadas (o las de fabrica)."""
+        for b, v in zip(self._botones_size, cantidades_botones()):
+            b.setText(str(v))
+
+    def _configurar_cantidades(self) -> None:
+        """Cuadro para cambiar las cantidades de los cuatro botones. Se recuerdan."""
+        actuales = cantidades_botones()
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Cantidades de los botones")
+        lay = QVBoxLayout(dlg)
+        lay.addWidget(QLabel("Cantidad de acciones de cada boton:"))
+        spins = []
+        fila = QHBoxLayout()
+        for v in actuales:
+            sp = QSpinBox()
+            sp.setRange(1, 1_000_000)
+            sp.setValue(v)
+            sp.setMaximumWidth(90)
+            fila.addWidget(sp)
+            spins.append(sp)
+        lay.addLayout(fila)
+        botones = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        botones.accepted.connect(dlg.accept)
+        botones.rejected.connect(dlg.reject)
+        lay.addWidget(botones)
+        if dlg.exec() == QDialog.Accepted:
+            guardar_cantidades_botones([sp.value() for sp in spins])
+            self._cargar_cantidades()
+            self._log(f"Ladder: botones de cantidad -> {cantidades_botones()}")
 
     def _comprar_al_ask(self) -> None:
         if self._last:
