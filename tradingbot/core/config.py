@@ -81,6 +81,12 @@ class EngineConfig:
     ventana_bid_s: float = 30.0
     max_cambios_ask: int | None = None
     ventana_ask_s: float = 30.0
+    # Filtro de SPREAD MAXIMO: el spread mas ancho de los ultimos X segundos no debe
+    # superar este % del spread ACTUAL (el que se usa para calcular la orden).
+    # Ej. 150 => si el spread llego a estar 2x mas ancho que el de ahora, saltea.
+    # None = filtro apagado.
+    max_spread_pct: float | None = None
+    ventana_spread_s: float = 30.0
     volume_min: int | None = None       # filtro de volumen operado en el dia, en
     volume_max: int | None = None       # acciones (None = sin limite por ese lado)
     duration: Duration = Duration.DAY   # por defecto DAY

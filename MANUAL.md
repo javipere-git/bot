@@ -40,6 +40,20 @@ Tradier (120/min de datos, por token). El streaming casi no lo gasta, pero las
 lecturas REST de precios si; con las dos operando fuerte al mismo tiempo podrias
 acercarte al tope. En uso normal (una posicion por vez) no molesta.
 
+### Volumen del dia: verificado que Tradier esta BIEN (30/07/2026)
+Se dudaba de si Tradier calculaba el volumen desde sus prints (que vienen muestreados,
+ver Time & Sales). NO: coincide con Alpaca SIP casi exacto -> lo toma de la cinta
+consolidada. Comparacion: SPY 66.811.269 (Tradier) vs 67.002.681 (Alpaca); KPLT 10.557
+vs 10.561; TWFG 161.268 vs 161.279. El filtro de volumen del dia sirve en los dos.
+
+**PERO se encontro un bug propio en Alpaca (arreglado)**: en la sesion OVERNIGHT el
+conector devolvia el volumen de la sesion nocturna como si fuera el del dia (SPY:
+35.530 en vez de 67.002.681, 1.900 veces menos). Con el filtro de volumen puesto, de
+noche se hubieran salteado TODOS los simbolos. Arreglado: durante el overnight el
+volumen del dia se pide al feed de la rueda regular y se cachea 5 minutos (de noche la
+rueda esta cerrada, ese numero ya no cambia). Los PRECIOS siguen saliendo de `boats`,
+sin cambios en el resto de la operatoria nocturna.
+
 ### Diferencias entre brokers (a tener en cuenta)
 - **Alpaca no distingue "vender en corto" de "vender"**: el conector lo traduce solo.
 - **Lista de ordenes: solo HOY** (23/07/2026). Alpaca, a diferencia de Tradier, NO
@@ -374,6 +388,21 @@ Sirve para **saltear acciones nerviosas**: una que hace 10 minutos esta clavada 
 - Si **cualquiera de los dos lados** se movio MAS veces que su tope, saltea el simbolo
   y sigue con el siguiente (igual que spread y volumen).
 
+### Filtro de spread maximo (30/07/2026)
+
+Campo **"Max spread: [X] % del actual, en los ultimos [Y] segundos"**.
+
+Saltea las acciones cuyo spread estuvo **mucho mas ancho hace un rato** que ahora.
+El spread ACTUAL es el que se usa para calcular la orden de entrada.
+
+Ejemplo con **150%**:
+- spread mas ancho de los ultimos 30s = **0.20**, spread actual = **0.10** -> eso es
+  **200%** -> **SALTEA**.
+- si el mas ancho hubiera sido **0.14** -> **140%** -> **entra**.
+
+Misma mecanica que el filtro de movimiento: ventana deslizante medida justo antes de
+operar ese simbolo, alimentada por el streaming (0 llamadas a la API). Vacio = apagado.
+
 **De donde salen los datos**: del **STREAMING**, que ya manda cada cambio de precio
 sin gastar llamadas a la API. Al iniciar el bot con este filtro activo, el streaming
 se suscribe a **toda la watchlist** (antes solo seguia el simbolo del ladder). Por eso
@@ -386,7 +415,7 @@ streaming, el bot **ESPERA los segundos que falten** antes de decidir (la ventan
 larga de las dos, si usas las dos). Preferimos
 demorar unos segundos que decidir con datos incompletos. Pasa una sola vez, al inicio.
 
-**OJO con el feed**: el filtro depende de la calidad del streaming. Medido el
+**OJO con el feed**: los filtros dependen de la calidad del streaming. Medido el
 29/07/2026 en el after-hours (cambios de bid/ask en 20s): Alpaca dio SPY 56 / AAPL 16,
 y Tradier 0 en todos (Tradier no parece streamear quotes fuera de la rueda; durante el
 dia si manda). Con Alpaca SIP el filtro discrimina perfecto: SPY 56 vs una iliquida 0.

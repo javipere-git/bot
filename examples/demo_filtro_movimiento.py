@@ -172,7 +172,42 @@ def main() -> None:
     print(f"   NERVIOSA con el filtro apagado -> pasa: {ok5} (esperado True)")
     print(f"   -> {'OK' if ok5 else '*** FALLO'}\n")
 
-    todo = ok1 and ok1b and ok2 and ok3 and ok4 and ok5
+    print("=" * 72)
+    print("6) Filtro de SPREAD MAXIMO (el ejemplo del usuario)")
+    print("=" * 72)
+    obs6 = ObservadorMovimiento(ahora=reloj)
+    b6 = FakeBroker()
+    b6.set_quote("ANCHA", bid=100.00, ask=100.10, volume=5_000_000)
+    cfg6 = EngineConfig(
+        quantity=10, side=Side.BUY,
+        order1=OrderConfig(offset=50, unit=OffsetUnit.PERCENT_SPREAD, timeout_s=1),
+        order2=OrderConfig(offset=50, unit=OffsetUnit.PERCENT_SPREAD, timeout_s=1),
+        exit_levels=[], guard=None,
+        max_spread_pct=150, ventana_spread_s=30,
+    )
+    m6 = BotEngine(b6, cfg6, log=lambda m: print(f"      {m}"), observador=obs6)
+    obs6.observar(["ANCHA"])
+    reloj.avanzar(40)
+
+    # el spread llego a estar en 0.20 y ahora esta en 0.10 -> 200% -> SALTEA
+    obs6.anotar("ANCHA", 100.00, 100.20)      # spread 0.20
+    obs6.anotar("ANCHA", 100.00, 100.10)      # spread 0.10 (actual)
+    print("   spread max 0.20, actual 0.10 -> 200% (tope 150%):")
+    saltea6 = not m6._movimiento_ok("ANCHA", 0.10)
+
+    # ahora el mas ancho fue 0.14 -> 140% -> ENTRA
+    obs7 = ObservadorMovimiento(ahora=reloj)
+    m7 = BotEngine(b6, cfg6, log=lambda m: print(f"      {m}"), observador=obs7)
+    obs7.observar(["ANCHA"])
+    reloj.avanzar(40)
+    obs7.anotar("ANCHA", 100.00, 100.14)      # spread 0.14
+    obs7.anotar("ANCHA", 100.00, 100.10)      # spread 0.10 (actual)
+    print("   spread max 0.14, actual 0.10 -> 140% (tope 150%):")
+    pasa6 = m7._movimiento_ok("ANCHA", 0.10)
+    ok6 = saltea6 and pasa6
+    print(f"   -> {'OK: saltea la de 200% y entra en la de 140%' if ok6 else '*** FALLO'}\n")
+
+    todo = ok1 and ok1b and ok2 and ok3 and ok4 and ok5 and ok6
     print("=" * 72)
     print("OK: el filtro de movimiento funciona con ventana deslizante."
           if todo else "*** HAY FALLOS.")

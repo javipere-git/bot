@@ -200,6 +200,30 @@ class ControlPanel(QWidget):
         self.ed_mov_ask_max, self.ed_mov_ask_seg = self._fila_movimiento(
             form, "Max cambios ask:", AYUDA_MOV
         )
+
+        spr = QHBoxLayout()
+        self.ed_spr_pct = QLineEdit()
+        self.ed_spr_pct.setPlaceholderText("%")
+        self.ed_spr_pct.setMaximumWidth(50)
+        self.ed_spr_seg = QLineEdit()
+        self.ed_spr_seg.setPlaceholderText("seg")
+        self.ed_spr_seg.setMaximumWidth(50)
+        spr.addWidget(self.ed_spr_pct)
+        spr.addWidget(QLabel("% del actual, en los ultimos"))
+        spr.addWidget(self.ed_spr_seg)
+        spr.addWidget(QLabel("segundos"))
+        caja_spr = self._wrap(spr)
+        caja_spr.setToolTip(
+            "Saltea las acciones cuyo spread estuvo MUCHO mas ancho hace un rato que "
+            "ahora (el spread actual es el que se usa para calcular la orden).\n\n"
+            "Ejemplo con 150%: si el spread mas ancho de los ultimos 30s fue 0.20 y "
+            "el actual es 0.10, eso es 200% -> SALTEA. Si el mas ancho hubiera sido "
+            "0.14 (140%), entra.\n\n"
+            "Se mide justo ANTES de operar cada simbolo, contando los segundos "
+            "literalmente hacia atras.\n\n"
+            "Necesita el streaming conectado. Vacio = filtro apagado."
+        )
+        form.addRow("Max spread:", caja_spr)
         return g
 
     def _fila_movimiento(self, form, etiqueta: str, ayuda: str):
@@ -427,6 +451,8 @@ class ControlPanel(QWidget):
             ventana_bid_s=float(self._parse_int(self.ed_mov_bid_seg.text()) or 30),
             max_cambios_ask=self._parse_int(self.ed_mov_ask_max.text()),
             ventana_ask_s=float(self._parse_int(self.ed_mov_ask_seg.text()) or 30),
+            max_spread_pct=self._parse_float(self.ed_spr_pct.text()),
+            ventana_spread_s=float(self._parse_int(self.ed_spr_seg.text()) or 30),
             volume_min=self._parse_int(self.ed_vol_min.text()),
             volume_max=self._parse_int(self.ed_vol_max.text()),
             exit_levels=exit_levels,

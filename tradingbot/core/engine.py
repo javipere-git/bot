@@ -359,7 +359,7 @@ class BotEngine:
         if not self._volume_ok(quote.volume):
             self._log(f"{sym}: volumen del dia {quote.volume:,} fuera de rango -> salteo")
             return None
-        if not self._movimiento_ok(sym):
+        if not self._movimiento_ok(sym, spread):
             return None
 
         price1 = self._entry_price(quote, self._cfg.order1)
@@ -674,7 +674,7 @@ class BotEngine:
             return offset
         return (offset / 100.0) * quote.spread
 
-    def _movimiento_ok(self, sym: str) -> bool:
+    def _movimiento_ok(self, sym: str, spread_actual: float | None = None) -> bool:
         """Filtro de movimiento: cuantas veces se movio el bid/ask en los ultimos
         segundos. Se mide SIEMPRE hacia atras desde AHORA (ventana deslizante), o sea
         justo antes de operar este simbolo, no desde que arranco la watchlist.
@@ -686,13 +686,16 @@ class BotEngine:
         obs = self._observador
         tope_bid = self._cfg.max_cambios_bid
         tope_ask = self._cfg.max_cambios_ask
-        if obs is None or (tope_bid is None and tope_ask is None):
+        tope_spread = self._cfg.max_spread_pct
+        if obs is None or (tope_bid is None and tope_ask is None and tope_spread is None):
             return True
 
-        # cada lado con su ventana; se espera la mas larga de las que se usan
+        # cada filtro con su ventana; se espera la mas larga de las que se usan
         v_bid = max(1.0, float(self._cfg.ventana_bid_s)) if tope_bid is not None else 0.0
         v_ask = max(1.0, float(self._cfg.ventana_ask_s)) if tope_ask is not None else 0.0
-        falta = max(v_bid, v_ask) - obs.observando_hace(sym)
+        v_spr = (max(1.0, float(self._cfg.ventana_spread_s))
+                 if tope_spread is not None else 0.0)
+        falta = max(v_bid, v_ask, v_spr) - obs.observando_hace(sym)
         if falta > 0:
             self._log(
                 f"{sym}: espero {falta:.0f}s para tener la ventana completa de "
@@ -719,6 +722,21 @@ class BotEngine:
                 )
                 return False
             partes.append(f"{lado} {cambios} en {ventana:.0f}s (tope {tope})")
+
+        if tope_spread is not None and spread_actual and spread_actual > 0:
+            maximo = obs.spread_maximo(sym, v_spr)
+            if maximo is not None:
+                pct = (maximo / spread_actual) * 100.0
+                if pct > tope_spread:
+                    self._log(
+                        f"{sym}: el spread llego a {maximo:.2f} en {v_spr:.0f}s, "
+                        f"{pct:.0f}% del actual ({spread_actual:.2f}) "
+                        f"-> salteo, supera el {tope_spread:.0f}%"
+                    )
+                    return False
+                partes.append(
+                    f"spread max {maximo:.2f} = {pct:.0f}% del actual (tope {tope_spread:.0f}%)"
+                )
         self._log(f"{sym}: movimiento OK -> " + ", ".join(partes))
         return True
 

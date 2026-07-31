@@ -20,6 +20,7 @@ from __future__ import annotations
 import configparser
 import os
 import threading
+import time
 from datetime import datetime, timezone
 from typing import Any, Callable
 
@@ -172,6 +173,7 @@ class AlpacaBroker(Broker):
         self._trading_base = trading_base   # paper o live (dinero real)
         self._es_live = trading_base == LIVE_TRADING_BASE
         self._feed = feed  # 'iex' (gratis) o 'sip' (suscripcion)
+        self._cache_volumen: dict[str, tuple] = {}  # volumen de la rueda (overnight)
         self._account_id = ""
         self._environment = "live" if self._es_live else "paper"
         self._session = requests.Session()
@@ -431,20 +433,48 @@ class AlpacaBroker(Broker):
 
     def get_quote(self, symbol: str) -> Quote:
         # el snapshot trae la cotizacion Y el volumen del dia en una sola llamada
+        feed = self.feed_actual()
         data = self._get(
             f"/v2/stocks/{symbol}/snapshot",
-            params={"feed": self.feed_actual()}, base=DATA_BASE,
+            params={"feed": feed}, base=DATA_BASE,
         )
         lq = (data or {}).get("latestQuote") or {}
         db = (data or {}).get("dailyBar") or {}
+        volumen = int(float(db.get("v") or 0))
+        if feed == "boats":
+            # De noche el feed de Blue Ocean solo cuenta el volumen de la sesion
+            # nocturna: SPY daba 35.530 en vez de 67.002.681. Con el filtro de
+            # volumen puesto, eso saltearia TODOS los simbolos. El volumen del dia
+            # se pide al feed de la rueda regular (que de noche ya no cambia, asi
+            # que se cachea). Los PRECIOS siguen saliendo de boats, igual que antes.
+            volumen = self._volumen_rueda(symbol) or volumen
         return Quote(
             symbol=symbol,
             bid=float(lq.get("bp") or 0.0),
             ask=float(lq.get("ap") or 0.0),
             bid_size=int(lq.get("bs") or 0),
             ask_size=int(lq.get("as") or 0),
-            volume=int(float(db.get("v") or 0)),
+            volume=volumen,
         )
+
+    CACHE_VOL_S = 300.0    # de noche la rueda esta cerrada: el volumen no cambia
+
+    def _volumen_rueda(self, symbol: str) -> int:
+        """Volumen del dia de la RUEDA REGULAR, para usar durante el overnight."""
+        ahora = time.monotonic()
+        guardado = self._cache_volumen.get(symbol)
+        if guardado is not None and ahora - guardado[0] < self.CACHE_VOL_S:
+            return guardado[1]
+        try:
+            data = self._get(
+                f"/v2/stocks/{symbol}/snapshot",
+                params={"feed": self._feed}, base=DATA_BASE,
+            )
+            vol = int(float(((data or {}).get("dailyBar") or {}).get("v") or 0))
+        except Exception:  # noqa: BLE001
+            return 0       # si falla, se usa lo que haya (nunca frena la lectura)
+        self._cache_volumen[symbol] = (ahora, vol)
+        return vol
 
     def _parse_order(self, o: dict) -> Order:
         return _parse_order_dict(o)

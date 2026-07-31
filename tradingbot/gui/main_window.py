@@ -255,7 +255,8 @@ class MainWindow(QMainWindow):
         # el streaming se suscribe a TODA la watchlist: asi el observador puede medir
         # cuantas veces se movio el bid/ask de cada simbolo antes de que el bot llegue
         filtra_movimiento = (config.max_cambios_bid is not None
-                             or config.max_cambios_ask is not None)
+                             or config.max_cambios_ask is not None
+                             or config.max_spread_pct is not None)
         if self._stream is not None and filtra_movimiento:
             self._observador.observar(symbols)
             self._stream.set_watchlist(symbols)

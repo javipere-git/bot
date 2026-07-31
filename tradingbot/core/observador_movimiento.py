@@ -1,6 +1,9 @@
 """
-Observador de movimiento: cuenta CUANTAS VECES se movio el bid y CUANTAS el ask de
-cada simbolo en los ultimos segundos. Los dos lados se cuentan por separado.
+Observador de movimiento: mira como se comporto cada simbolo en los ultimos segundos.
+Dos cosas, las dos alimentadas por el streaming:
+
+  - CUANTAS VECES se movio el bid y cuantas el ask (los dos lados por separado).
+  - Cual fue el SPREAD MAS ANCHO en ese rato (para el filtro de spread maximo).
 
 Para que sirve: antes de entrarle a una accion conviene saber si esta quieta o
 nerviosa. Una accion que hace 10 minutos esta clavada en 100.00 x 100.50 no es lo
@@ -38,6 +41,7 @@ class ObservadorMovimiento:
         self._ultimo_ask: dict[str, float] = {}
         self._cambios_bid: dict[str, list] = {}   # sym -> [instantes de cada cambio]
         self._cambios_ask: dict[str, list] = {}
+        self._spreads: dict[str, list] = {}       # sym -> [(instante, spread)]
         self._desde: dict[str, float] = {}        # sym -> desde cuando lo observamos
 
     # ---------- lo llama el streaming ----------
@@ -59,6 +63,13 @@ class ObservadorMovimiento:
                 self._anotar_cambio(self._cambios_bid, sym, ahora)
             if ant_a is not None and ant_a != a:
                 self._anotar_cambio(self._cambios_ask, sym, ahora)
+            # historial del spread (para el filtro de spread maximo)
+            if b > 0 and a > 0:
+                hist = self._spreads.setdefault(sym, [])
+                hist.append((ahora, round(a - b, 4)))
+                corte = ahora - self.RECORDAR_S
+                if hist[0][0] < corte:
+                    self._spreads[sym] = [x for x in hist if x[0] >= corte]
 
     def _anotar_cambio(self, donde: dict, sym: str, ahora: float) -> None:
         """Agrega el instante y poda lo viejo (no acumular para siempre)."""
@@ -93,6 +104,16 @@ class ObservadorMovimiento:
         with self._lock:
             return sum(1 for t in donde.get(sym.upper(), ()) if t >= desde)
 
+    def spread_maximo(self, sym: str, segundos: float):
+        """El spread MAS ANCHO que tuvo el simbolo en los ultimos `segundos`.
+        None si no hay datos todavia."""
+        if not sym or segundos <= 0:
+            return None
+        desde = self._ahora() - segundos
+        with self._lock:
+            vistos = [sp for t, sp in self._spreads.get(sym.upper(), ()) if t >= desde]
+        return max(vistos) if vistos else None
+
     def observando_hace(self, sym: str) -> float:
         """Segundos que lleva observando ese simbolo. 0 si nunca lo vio."""
         if not sym:
@@ -107,4 +128,5 @@ class ObservadorMovimiento:
             self._ultimo_ask.clear()
             self._cambios_bid.clear()
             self._cambios_ask.clear()
+            self._spreads.clear()
             self._desde.clear()
