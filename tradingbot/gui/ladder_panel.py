@@ -619,7 +619,11 @@ class LadderPanel(QWidget):
             return
         for oid in ids:
             try:
-                broker.modify_order(oid, price=round(nuevo, 2))
+                # se respeta la duracion que YA tiene la orden: si es de horario
+                # extendido (pre/post) y se manda "day", el broker la rechaza
+                orden = next((o for o in self._orders if str(o.id) == str(oid)), None)
+                dur = getattr(orden, "duration", None)
+                broker.modify_order(oid, price=round(nuevo, 2), duration=dur)
                 self._log(f"Ladder: orden {oid} movida a {nuevo:.2f}.")
             except Exception as e:  # noqa: BLE001
                 self._log(f"Ladder: no se pudo mover ({e})")

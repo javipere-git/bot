@@ -86,8 +86,14 @@ class Broker(ABC):
         *,
         price: float | None = None,
         quantity: int | None = None,
+        duration=None,
     ) -> Order:
         """Modifica (re-precia) una orden viva. Esto es el 'replace'.
+
+        `duration`: la duracion que YA tiene la orden (day / pre / post). Hay brokers
+        que la exigen al modificar y rechazan la orden si se les manda otra distinta
+        (Tradier: "pre and post market orders cannot modify duration"). Los que no la
+        necesitan la ignoran.
 
         Se usa para pasar de la Orden 1 a la Orden 2, para los escalones de
         salida, y para arrastrar una orden a otro nivel en el ladder.

@@ -109,7 +109,42 @@ def main() -> None:
     guardar_cantidades_botones(originales)     # dejar como estaba
     print(f"   (restaurados a {cantidades_botones()})\n")
 
-    todo = ok1 and ok2 and ok3 and ok4 and ok5
+    print("6) Mover una orden respeta su DURACION (horario extendido)")
+    # Bug real: al mover una orden de post-market, se mandaba duration=day y Tradier
+    # la rechazaba con "pre and post market orders cannot modify duration".
+    from tradingbot.core.models import Duration
+
+    class BrokerEspia(FakeBroker):
+        """Anota con que duracion se pidio la modificacion."""
+        def __init__(self):
+            super().__init__()
+            self.duraciones = []
+
+        def modify_order(self, order_id, *, price=None, quantity=None, duration=None):
+            self.duraciones.append(duration)
+            return super().modify_order(order_id, price=price, quantity=quantity)
+
+    espia = BrokerEspia()
+    espia.set_quote("AAPL", bid=100.00, ask=100.10)
+    l3 = LadderPanel(broker_provider=lambda: espia, log=lambda m: None)
+    l3.ed_symbol.setText("AAPL")
+    l3._cambiar_symbol()
+    l3.actualizar_quote("AAPL", 100.00, 100.10, 500, 400)
+    l3._repintar()
+    l3.chk_ext.setChecked(True)               # orden de horario extendido
+    fila = _fila_de_precio(l3, 99.95)
+    l3._click_celda(fila, C_BID)
+    orden = espia.get_open_orders()[0]
+    orden.duration = Duration.POST            # como la reporta el broker en post-market
+    l3.set_orders(espia.get_open_orders())
+    l3._repintar()
+    destino = _fila_de_precio(l3, 99.90)
+    l3._mover_orden([orden.id], destino)
+    ok6 = espia.duraciones == [Duration.POST]
+    print(f"   la orden es POST; al moverla se mando duracion: {espia.duraciones}")
+    print(f"   -> {'OK: respeta la duracion (antes mandaba day y fallaba)' if ok6 else '*** FALLO'}\n")
+
+    todo = ok1 and ok2 and ok3 and ok4 and ok5 and ok6
     print("OK: mandar por bid/ask, cancelar en tu orden, botones configurables."
           if todo else "*** HAY FALLOS.")
 

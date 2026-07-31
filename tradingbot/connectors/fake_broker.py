@@ -82,6 +82,7 @@ class FakeBroker(Broker):
         *,
         price: float | None = None,
         quantity: int | None = None,
+        duration=None,
     ) -> Order:
         order = self._orders[order_id]
         if not order.is_active:

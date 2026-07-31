@@ -56,8 +56,10 @@ class BrokerHibrido(Broker):
     def place_order(self, request: OrderRequest) -> Order:
         return self._op.place_order(request)
 
-    def modify_order(self, order_id: str, *, price=None, quantity=None) -> Order:
-        return self._op.modify_order(order_id, price=price, quantity=quantity)
+    def modify_order(self, order_id: str, *, price=None, quantity=None,
+                     duration=None) -> Order:
+        return self._op.modify_order(order_id, price=price, quantity=quantity,
+                                     duration=duration)
 
     def cancel_order(self, order_id: str) -> None:
         self._op.cancel_order(order_id)

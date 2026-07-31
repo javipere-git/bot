@@ -272,6 +272,11 @@ la posicion este cerrada. (Si ya estabas mirando ese mismo simbolo, no se toca n
   ordenes: solo cancelan.**
 - **Tus ordenes** aparecen dibujadas en azul con "[X]"; click las cancela.
 - **Arrastrar** una orden a otro nivel = modifica su precio (no cancela y remanda).
+  Funciona tambien **fuera de la rueda regular**: al modificar se le repite a Tradier
+  la duracion que la orden YA tiene (day / pre / post). Antes se mandaba siempre
+  "day" y Tradier rechazaba las de horario extendido con *"pre and post market orders
+  cannot modify duration"* -> no se podian mover en pre/post market (arreglado el
+  30/07/2026).
 - **Botones de cantidad configurables**: la **rueda** al lado del ultimo boton abre un
   cuadro para cambiar las cantidades de los cuatro. Se recuerdan.
 - **Marca amarilla** = tu precio promedio de la posicion.

@@ -320,7 +320,8 @@ class TradierBroker(Broker):
         )
 
     def modify_order(
-        self, order_id: str, *, price: float | None = None, quantity: int | None = None
+        self, order_id: str, *, price: float | None = None, quantity: int | None = None,
+        duration: "Duration | str | None" = None,
     ) -> Order:
         # Tradier permite cambiar precio/type/duration, pero NO la cantidad.
         if quantity is not None:
@@ -329,9 +330,12 @@ class TradierBroker(Broker):
                 "para eso hay que cancelar y mandar una nueva."
             )
         # Incluimos type y duration porque el endpoint de Tradier suele pedirlos.
-        # Por ahora el bot solo usa ordenes limit/day; cuando sumemos horario
-        # extendido, se pasara la duracion real.
-        data: dict[str, str] = {"type": "limit", "duration": "day"}
+        # OJO: hay que mandar la duracion QUE YA TIENE la orden. Si a una orden de
+        # horario extendido (pre/post) se le manda "day", Tradier la rechaza con
+        # "pre and post market orders cannot modify duration" -> por eso antes fallaba
+        # mover una orden en el ladder fuera de la rueda regular.
+        dur = getattr(duration, "value", duration) or "day"
+        data: dict[str, str] = {"type": "limit", "duration": str(dur)}
         if price is not None:
             data["price"] = f"{price:.2f}"
         self._send("PUT", f"/accounts/{self._account_id}/orders/{order_id}", data=data)

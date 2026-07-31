@@ -507,8 +507,12 @@ class AlpacaBroker(Broker):
         )
 
     def modify_order(
-        self, order_id: str, *, price: float | None = None, quantity: int | None = None
+        self, order_id: str, *, price: float | None = None, quantity: int | None = None,
+        duration=None,
     ) -> Order:
+        # `duration` se acepta por compatibilidad con la interfaz comun pero no se usa:
+        # Alpaca conserva el horario extendido de la orden al reemplazarla (a Tradier
+        # SI hay que repetirsela, si no rechaza las de pre/post market).
         # A diferencia de Tradier, Alpaca SI permite cambiar la cantidad al reemplazar.
         body: dict[str, str] = {}
         if price is not None:
