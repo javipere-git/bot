@@ -6,6 +6,40 @@
 
 ---
 
+## 0. GARANTIA: las ordenes son DAY salvo que tildes "Ext. hours"
+
+Regla que la app cumple **siempre**, en el bot y en el ladder, para TODOS los brokers:
+
+| Ext. hours | Al MANDAR | Al MOVER |
+|---|---|---|
+| destildado | Tradier `duration=day` / Alpaca sin `extended_hours` | sigue siendo **day** |
+| tildado | Tradier `duration=pre`/`post` / Alpaca `extended_hours=true` | conserva su condicion |
+
+**Como se garantiza (no es una promesa, esta cableado):**
+- Los 5 unicos lugares que crean ordenes (4 en el motor + 1 en el ladder) pasan el
+  `extended` del tilde correspondiente. `OrderRequest.extended` es **False** por
+  defecto y `EngineConfig.duration` es **DAY** siempre.
+- Al MODIFICAR se le repite al broker **la duracion que la orden YA tiene** (leida del
+  broker). Nunca se inventa: una orden day se modifica como day. Si por lo que sea no
+  se conoce, cae a **day** (lo seguro).
+- El cuerpo del PATCH de Alpaca solo lleva el precio: **no puede** convertir una orden
+  normal en extendida.
+
+**Verificado contra las cuentas reales** (30/07/2026): Tradier informa `day`/`post`
+segun el tilde; Alpaca informa `extended=False/True`. Y congelado en el test
+`examples/demo_ordenes_day.py`, que revisa el CUERPO EXACTO que recibe cada broker sin
+tocar la red.
+
+**Para brokers futuros**: el conector nuevo DEBE respetar `OrderRequest.extended` al
+mandar y el parametro `duration` al modificar. El test de arriba es el molde a cumplir.
+
+**En pantalla**: las tres tablas del monitoreo (abiertas / ejecutadas / canceladas)
+tienen la columna **"Dur."** con lo que informa el broker: `day`, `pre`, `post`, o
+`ext` (Alpaca, que no distingue pre de post). Las que NO son day se pintan de amarillo
+para que salten a la vista.
+
+---
+
 ## 1. Como abrir la app
 
 - **Acceso directo "Bot Trading"** en el Escritorio (doble click, sin ventana de consola).

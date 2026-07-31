@@ -483,7 +483,10 @@ class BotEngine:
                           f"no reprecio, espero")
             else:
                 devuelta, ok = self._safe_order(
-                    lambda: self._broker.modify_order(order.id, price=price), f"{sym}: modificar salida"
+                    lambda: self._broker.modify_order(
+                        order.id, price=price, duration=self._duracion_orden(order)
+                    ),
+                    f"{sym}: modificar salida",
                 )
                 if not ok and not self._ya_lleno(order.id):
                     continue
@@ -617,8 +620,13 @@ class BotEngine:
             if not ok:
                 return
         else:
+            # la orden viva puede ser de horario extendido: hay que repetir su duracion
+            viva, _ = self._get_order(order_id)
             self._safe_order(
-                lambda: self._broker.modify_order(order_id, price=cross), f"{sym}: salida forzada"
+                lambda: self._broker.modify_order(
+                    order_id, price=cross, duration=self._duracion_orden(viva)
+                ),
+                f"{sym}: salida forzada",
             )
         deadline = self._clock.now() + 5
         while not self._is_flat(sym) and not self._stopped and self._clock.now() < deadline:
@@ -778,11 +786,30 @@ class BotEngine:
         o, ok = self._get_order(order_id)
         return bool(ok and (o.filled_quantity > 0 or o.status == OrderStatus.FILLED))
 
+    def _duracion_orden(self, order: Order | None = None):
+        """La duracion con la que hay que modificar una orden.
+
+        Se usa la que la orden YA tiene (day / pre / post). Es obligatorio repetirsela
+        a Tradier: si a una orden de horario extendido se le manda "day", la rechaza
+        con "pre and post market orders cannot modify duration".
+
+        Si no se conoce la orden, se cae a la configurada (DAY salvo que se pida
+        horario extendido), que es justo lo que se uso al mandarla.
+        """
+        dur = getattr(order, "duration", None)
+        if dur is not None:
+            return dur
+        if self._cfg.extended_hours:
+            return None    # que el conector resuelva la sesion (pre/post)
+        return self._cfg.duration
+
     def _reprice(self, order: Order, sym: str, new_price: float) -> tuple[Order | None, bool]:
         """Reprecia la orden. Devuelve (orden_o_None, ya_se_lleno)."""
         if self._cfg.reprice_mode == "modify":
             try:
-                devuelta = self._broker.modify_order(order.id, price=new_price)
+                devuelta = self._broker.modify_order(
+                    order.id, price=new_price, duration=self._duracion_orden(order)
+                )
                 self._order_strikes = 0
                 self._read_fails = 0
                 # si el broker reemplazo la orden por una nueva (Alpaca), seguimos esa

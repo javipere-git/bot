@@ -11,6 +11,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QBrush, QColor
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QHeaderView,
@@ -86,7 +87,9 @@ class MonitorPanel(QWidget):
         lay.addWidget(sec_pos, 1)
 
         sec_ord = CollapsibleSection("Ordenes abiertas")
-        self.tbl_ord = self._tabla(["Hora", "Simbolo", "Lado", "Cant", "Tipo", "Limite", "Estado"], "abiertas")
+        self.tbl_ord = self._tabla(
+            ["Hora", "Simbolo", "Lado", "Cant", "Tipo", "Dur.", "Limite", "Estado"],
+            "abiertas")
         sec_ord.add_widget(self.tbl_ord)
         lay.addWidget(sec_ord, 1)
 
@@ -98,12 +101,13 @@ class MonitorPanel(QWidget):
         lay.addWidget(self.lbl_counts)
 
         sec_exec = CollapsibleSection("Ejecutadas")
-        self.tbl_exec = self._tabla(["Hora", "Simbolo", "Lado", "Cant", "Prom"], "ejecutadas")
+        self.tbl_exec = self._tabla(["Hora", "Simbolo", "Lado", "Cant", "Dur.", "Prom"], "ejecutadas")
         sec_exec.add_widget(self.tbl_exec)
         lay.addWidget(sec_exec, 1)
 
         sec_canc = CollapsibleSection("Canceladas")
-        self.tbl_canc = self._tabla(["Hora", "Simbolo", "Lado", "Cant", "Limite", "Estado"], "canceladas")
+        self.tbl_canc = self._tabla(["Hora", "Simbolo", "Lado", "Cant", "Dur.", "Limite", "Estado"],
+                                 "canceladas")
         sec_canc.add_widget(self.tbl_canc)
         lay.addWidget(sec_canc, 1)
 
@@ -142,6 +146,22 @@ class MonitorPanel(QWidget):
             t.setItem(r, 3, _NumItem(p.avg_price, f"{p.avg_price:.2f}"))
         t.setSortingEnabled(True)
 
+    @staticmethod
+    def _dur(o):
+        """Duracion de la orden TAL COMO LA REPORTA EL BROKER: day / pre / post.
+        Sirve para verificar de un vistazo que no se mandaron ordenes de horario
+        extendido sin querer. Las pre/post se pintan para que salten a la vista."""
+        valor = getattr(getattr(o, "duration", None), "value", None) or "day"
+        if valor == "day" and getattr(o, "extended", False):
+            valor = "ext"      # Alpaca no distingue pre/post: solo "horario extendido"
+        it = QTableWidgetItem(str(valor))
+        it.setTextAlignment(Qt.AlignCenter)
+        if valor != "day":
+            it.setBackground(QBrush(QColor("#ffe08a")))     # horario extendido
+            it.setForeground(QBrush(QColor("#111111")))
+            it.setToolTip("Orden de HORARIO EXTENDIDO (fuera de la rueda regular)")
+        return it
+
     def set_day_pnl(self, dia) -> None:
         """Muestra el resultado del DIA: total grande + desglose (realizado/abierto).
         Acepta un DayPnL o, por compatibilidad, un numero suelto (solo abierto)."""
@@ -173,8 +193,9 @@ class MonitorPanel(QWidget):
             t.setItem(r, 2, self._txt(o.side.value))
             t.setItem(r, 3, _NumItem(o.quantity))
             t.setItem(r, 4, self._txt(o.type.value))
-            t.setItem(r, 5, _NumItem(o.price, f"{o.price:.2f}"))
-            t.setItem(r, 6, self._txt(o.status.value))
+            t.setItem(r, 5, self._dur(o))
+            t.setItem(r, 6, _NumItem(o.price, f"{o.price:.2f}"))
+            t.setItem(r, 7, self._txt(o.status.value))
         t.setSortingEnabled(True)
 
     def set_closed_orders(self, closed) -> None:
@@ -200,7 +221,8 @@ class MonitorPanel(QWidget):
             te.setItem(r, 1, self._txt(o.symbol))
             te.setItem(r, 2, self._txt(o.side.value))
             te.setItem(r, 3, _NumItem(cant))
-            te.setItem(r, 4, _NumItem(prom, f"{prom:.2f}"))
+            te.setItem(r, 4, self._dur(o))
+            te.setItem(r, 5, _NumItem(prom, f"{prom:.2f}"))
         te.setSortingEnabled(True)
 
         tc = self.tbl_canc
@@ -211,8 +233,9 @@ class MonitorPanel(QWidget):
             tc.setItem(r, 1, self._txt(o.symbol))
             tc.setItem(r, 2, self._txt(o.side.value))
             tc.setItem(r, 3, _NumItem(o.quantity))
-            tc.setItem(r, 4, _NumItem(o.price, f"{o.price:.2f}"))
-            tc.setItem(r, 5, self._txt(o.status.value))
+            tc.setItem(r, 4, self._dur(o))
+            tc.setItem(r, 5, _NumItem(o.price, f"{o.price:.2f}"))
+            tc.setItem(r, 6, self._txt(o.status.value))
         tc.setSortingEnabled(True)
 
         total = ne + nc

@@ -86,6 +86,10 @@ class Order:
     avg_fill_price: float = 0.0
     create_date: str = ""          # cuando se creo/envio (ISO de Tradier)
     transaction_date: str = ""     # ultima transaccion (ejecucion / cancelacion)
+    # True = la orden PUEDE ejecutarse fuera de la rueda regular. Tradier lo expresa
+    # en la duracion (pre/post); Alpaca con un campo aparte (extended_hours). Se
+    # guarda normalizado para poder mostrarlo igual venga de donde venga.
+    extended: bool = False
 
     @property
     def remaining_quantity(self) -> int:

@@ -103,7 +103,8 @@ def _parse_order_dict(o: dict) -> Order:
         quantity=int(float(o.get("qty") or 0)),
         price=float(o.get("limit_price") or 0.0),
         type=otype,
-        duration=Duration.DAY,
+        duration=Duration.DAY,      # Alpaca no usa pre/post: lo dice en extended_hours
+        extended=bool(o.get("extended_hours")),
         status=status,
         filled_quantity=int(float(o.get("filled_qty") or 0)),
         avg_fill_price=float(o.get("filled_avg_price") or 0.0),

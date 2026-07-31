@@ -282,6 +282,7 @@ class TradierBroker(Broker):
             price=float(o.get("price") or 0.0),
             type=otype,
             duration=duration,
+            extended=duration in (Duration.PRE, Duration.POST),
             status=status,
             filled_quantity=int(float(o.get("exec_quantity", 0))),
             avg_fill_price=float(o.get("avg_fill_price") or 0.0),
