@@ -181,8 +181,11 @@ def estilo_tabla(tabla, fondo_propio=None) -> None:
         pal.setColor(QPalette.Base, fondo_propio)
         pal.setColor(QPalette.AlternateBase, fondo_propio)
         tabla.setPalette(pal)
+    # Las tablas con fondo propio (ladder y cinta) llevan un borde MAS SUAVE: su fondo
+    # es mas claro y tienen celdas de color, asi que el gris fuerte se ve casi blanco.
+    clave = "borde_suave" if fondo_propio is not None else "borde"
     # la grilla nativa se apaga: la dibuja el delegado, con el color que elegimos
     tabla.setShowGrid(False)
-    delegado = _LineasDelegate(colores("borde"), tabla)
+    delegado = _LineasDelegate(colores(clave), tabla)
     tabla.setItemDelegate(delegado)
     tabla._delegado_lineas = delegado      # guardar la referencia (si no, se descarta)

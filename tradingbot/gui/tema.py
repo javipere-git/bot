@@ -91,6 +91,7 @@ _CLAROS = {
     "texto_best": QColor("#111111"),
     # el mismo tono que usaba Fusion por su cuenta: el modo claro ya se veia bien
     "borde": QColor("#c7c7c7"),      # lineas divisorias (modo claro)
+    "borde_suave": QColor("#c7c7c7"),
     "tape_verde": QColor("#1e7d34"),
     "tape_rojo": QColor("#b00020"),
     "tape_gris": QColor("#666666"),
@@ -111,7 +112,10 @@ _OSCUROS = {
     "amarillo": QColor("#8a6b1e"),
     "texto": QColor("#f2f2f2"),      # sobre esos tonos, letra clara
     "texto_best": QColor("#0e1a12"),  # sobre el verde/rojo chillon, letra oscura
-    "borde": QColor("#848b93"),      # lineas divisorias: gris claro, bien visible
+    "borde": QColor("#848b93"),      # lineas divisorias de las tablas de ordenes
+    # El ladder y la cinta tienen el fondo mas claro y ademas celdas de color: ahi el
+    # mismo gris se ve casi blanco. Con este tono se distingue sin ser chocante.
+    "borde_suave": QColor("#666d75"),
     "tape_verde": QColor("#4cd07a"),
     "tape_rojo": QColor("#ff6b7a"),
     "tape_gris": QColor("#a0a0a0"),
