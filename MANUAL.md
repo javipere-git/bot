@@ -440,6 +440,23 @@ Sirve para **saltear acciones nerviosas**: una que hace 10 minutos esta clavada 
 - Si **cualquiera de los dos lados** se movio MAS veces que su tope, saltea el simbolo
   y sigue con el siguiente (igual que spread y volumen).
 
+### Filtro de volumen reciente (30/07/2026)
+
+Campo **"Max volumen: [N] acciones, en los ultimos [Y] segundos"**. OJO: es el volumen
+**OPERADO EN ESOS SEGUNDOS**, no el del dia (ese es el filtro "Volumen dia").
+
+Saltea las acciones con demasiada actividad justo antes de entrar. Misma mecanica que
+los otros: ventana deslizante medida justo antes de operar ese simbolo, alimentada por
+el streaming (0 llamadas a la API). Vacio = apagado.
+
+**Por que es solo un MAXIMO (y no un minimo)**: el timesale de **Tradier viene
+muestreado** (~7x menos operaciones que Alpaca SIP), asi que en Tradier el volumen
+contado sale POR DEBAJO del real. Con un MAXIMO eso solo hace que **filtre de MENOS**
+(deja pasar algo que Alpaca hubiera salteado), nunca de mas. Con un MINIMO la logica se
+invierte y Tradier saltearia simbolos que en realidad cumplian -> el lado peligroso.
+Por eso no se ofrece minimo. Ejemplo con tope 1.000 en 10s: Alpaca cuenta 1.050 y
+saltea; Tradier cuenta 900 y entra.
+
 ### Filtro de spread maximo (30/07/2026)
 
 Campo **"Max spread: [X] % del actual, en los ultimos [Y] segundos"**.

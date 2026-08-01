@@ -4,6 +4,7 @@ Dos cosas, las dos alimentadas por el streaming:
 
   - CUANTAS VECES se movio el bid y cuantas el ask (los dos lados por separado).
   - Cual fue el SPREAD MAS ANCHO en ese rato (para el filtro de spread maximo).
+  - CUANTAS ACCIONES se operaron en ese rato (para el filtro de volumen reciente).
 
 Para que sirve: antes de entrarle a una accion conviene saber si esta quieta o
 nerviosa. Una accion que hace 10 minutos esta clavada en 100.00 x 100.50 no es lo
@@ -42,6 +43,7 @@ class ObservadorMovimiento:
         self._cambios_bid: dict[str, list] = {}   # sym -> [instantes de cada cambio]
         self._cambios_ask: dict[str, list] = {}
         self._spreads: dict[str, list] = {}       # sym -> [(instante, spread)]
+        self._volumen: dict[str, list] = {}       # sym -> [(instante, cantidad)]
         self._desde: dict[str, float] = {}        # sym -> desde cuando lo observamos
 
     # ---------- lo llama el streaming ----------
@@ -78,6 +80,40 @@ class ObservadorMovimiento:
         corte = ahora - self.RECORDAR_S
         if lista[0] < corte:
             donde[sym] = [t for t in lista if t >= corte]
+
+    def anotar_operacion(self, sym: str, cantidad) -> None:
+        """Una operacion (print) del streaming: se suma al volumen reciente.
+
+        OJO con el feed: el timesale de Tradier viene MUESTREADO (medido: ~7x menos
+        prints que Alpaca SIP), asi que en Tradier el volumen contado sale por DEBAJO
+        del real. Como el filtro es un MAXIMO, quedarse corto hace que filtre de
+        MENOS, nunca de mas: nunca saltea un simbolo que en realidad cumplia.
+        """
+        if not sym:
+            return
+        try:
+            qty = float(cantidad or 0)
+        except (TypeError, ValueError):
+            return
+        if qty <= 0:
+            return
+        sym = sym.upper()
+        ahora = self._ahora()
+        with self._lock:
+            self._desde.setdefault(sym, ahora)
+            hist = self._volumen.setdefault(sym, [])
+            hist.append((ahora, qty))
+            corte = ahora - self.RECORDAR_S
+            if hist[0][0] < corte:
+                self._volumen[sym] = [x for x in hist if x[0] >= corte]
+
+    def volumen(self, sym: str, segundos: float) -> float:
+        """Acciones operadas en los ultimos `segundos` (hasta AHORA)."""
+        if not sym or segundos <= 0:
+            return 0.0
+        desde = self._ahora() - segundos
+        with self._lock:
+            return sum(q for t, q in self._volumen.get(sym.upper(), ()) if t >= desde)
 
     def observar(self, symbols) -> None:
         """Marca desde cuando se observa cada simbolo (para saber si ya hay ventana
@@ -129,4 +165,5 @@ class ObservadorMovimiento:
             self._cambios_bid.clear()
             self._cambios_ask.clear()
             self._spreads.clear()
+            self._volumen.clear()
             self._desde.clear()

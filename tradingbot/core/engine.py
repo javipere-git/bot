@@ -695,7 +695,9 @@ class BotEngine:
         tope_bid = self._cfg.max_cambios_bid
         tope_ask = self._cfg.max_cambios_ask
         tope_spread = self._cfg.max_spread_pct
-        if obs is None or (tope_bid is None and tope_ask is None and tope_spread is None):
+        tope_vol = self._cfg.max_volumen_seg
+        if obs is None or (tope_bid is None and tope_ask is None
+                           and tope_spread is None and tope_vol is None):
             return True
 
         # cada filtro con su ventana; se espera la mas larga de las que se usan
@@ -703,7 +705,9 @@ class BotEngine:
         v_ask = max(1.0, float(self._cfg.ventana_ask_s)) if tope_ask is not None else 0.0
         v_spr = (max(1.0, float(self._cfg.ventana_spread_s))
                  if tope_spread is not None else 0.0)
-        falta = max(v_bid, v_ask, v_spr) - obs.observando_hace(sym)
+        v_vol = (max(1.0, float(self._cfg.ventana_volumen_s))
+                 if tope_vol is not None else 0.0)
+        falta = max(v_bid, v_ask, v_spr, v_vol) - obs.observando_hace(sym)
         if falta > 0:
             self._log(
                 f"{sym}: espero {falta:.0f}s para tener la ventana completa de "
@@ -745,6 +749,16 @@ class BotEngine:
                 partes.append(
                     f"spread max {maximo:.2f} = {pct:.0f}% del actual (tope {tope_spread:.0f}%)"
                 )
+
+        if tope_vol is not None:
+            operado = obs.volumen(sym, v_vol)
+            if operado > tope_vol:
+                self._log(
+                    f"{sym}: se operaron {operado:,.0f} acciones en {v_vol:.0f}s "
+                    f"(tope {tope_vol:,}) -> salteo, demasiada actividad"
+                )
+                return False
+            partes.append(f"volumen {operado:,.0f} en {v_vol:.0f}s (tope {tope_vol:,})")
         self._log(f"{sym}: movimiento OK -> " + ", ".join(partes))
         return True
 

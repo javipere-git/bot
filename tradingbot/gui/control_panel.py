@@ -224,6 +224,31 @@ class ControlPanel(QWidget):
             "Necesita el streaming conectado. Vacio = filtro apagado."
         )
         form.addRow("Max spread:", caja_spr)
+
+        vs = QHBoxLayout()
+        self.ed_vol_seg_max = QLineEdit()
+        self.ed_vol_seg_max.setPlaceholderText("max")
+        self.ed_vol_seg_max.setMaximumWidth(70)
+        self.ed_vol_seg_seg = QLineEdit()
+        self.ed_vol_seg_seg.setPlaceholderText("seg")
+        self.ed_vol_seg_seg.setMaximumWidth(50)
+        vs.addWidget(self.ed_vol_seg_max)
+        vs.addWidget(QLabel("acciones, en los ultimos"))
+        vs.addWidget(self.ed_vol_seg_seg)
+        vs.addWidget(QLabel("segundos"))
+        caja_vs = self._wrap(vs)
+        caja_vs.setToolTip(
+            "Acciones OPERADAS en los ultimos segundos (no el volumen del dia). "
+            "Saltea las acciones con demasiada actividad justo antes de entrar.\n\n"
+            "Se mide justo ANTES de operar cada simbolo, contando los segundos "
+            "literalmente hacia atras.\n\n"
+            "OJO con el feed: el timesale de TRADIER viene muestreado (~7x menos "
+            "operaciones que Alpaca SIP), asi que en Tradier el volumen contado sale "
+            "por debajo del real. Como esto es un MAXIMO, quedarse corto hace que "
+            "filtre de MENOS, nunca de mas: no saltea simbolos que si cumplian.\n\n"
+            "Necesita el streaming conectado. Vacio = filtro apagado."
+        )
+        form.addRow("Max volumen:", caja_vs)
         return g
 
     def _fila_movimiento(self, form, etiqueta: str, ayuda: str):
@@ -453,6 +478,8 @@ class ControlPanel(QWidget):
             ventana_ask_s=float(self._parse_int(self.ed_mov_ask_seg.text()) or 30),
             max_spread_pct=self._parse_float(self.ed_spr_pct.text()),
             ventana_spread_s=float(self._parse_int(self.ed_spr_seg.text()) or 30),
+            max_volumen_seg=self._parse_int(self.ed_vol_seg_max.text()),
+            ventana_volumen_s=float(self._parse_int(self.ed_vol_seg_seg.text()) or 30),
             volume_min=self._parse_int(self.ed_vol_min.text()),
             volume_max=self._parse_int(self.ed_vol_max.text()),
             exit_levels=exit_levels,

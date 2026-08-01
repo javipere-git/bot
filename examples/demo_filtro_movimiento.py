@@ -207,7 +207,45 @@ def main() -> None:
     ok6 = saltea6 and pasa6
     print(f"   -> {'OK: saltea la de 200% y entra en la de 140%' if ok6 else '*** FALLO'}\n")
 
-    todo = ok1 and ok1b and ok2 and ok3 and ok4 and ok5 and ok6
+    print("=" * 72)
+    print("7) Filtro de VOLUMEN RECIENTE (el ejemplo del usuario)")
+    print("=" * 72)
+    b7 = FakeBroker()
+    b7.set_quote("ACTIVA", bid=50.00, ask=50.05, volume=5_000_000)
+    cfg7 = EngineConfig(
+        quantity=10, side=Side.BUY,
+        order1=OrderConfig(offset=50, unit=OffsetUnit.PERCENT_SPREAD, timeout_s=1),
+        order2=OrderConfig(offset=50, unit=OffsetUnit.PERCENT_SPREAD, timeout_s=1),
+        exit_levels=[], guard=None,
+        max_volumen_seg=1000, ventana_volumen_s=10,
+    )
+
+    # Alpaca (feed completo): cuenta 1050 acciones -> se pasa del tope -> SALTEA
+    obs_a = ObservadorMovimiento(ahora=reloj)
+    obs_a.observar(["ACTIVA"])
+    reloj.avanzar(20)
+    for _ in range(7):
+        obs_a.anotar_operacion("ACTIVA", 150)          # 1050 acciones
+    m_a = BotEngine(b7, cfg7, log=lambda m: print(f"      {m}"), observador=obs_a)
+    print("   Alpaca (feed completo) ve 1050 acciones, tope 1000:")
+    saltea7 = not m_a._movimiento_ok("ACTIVA", 0.05)
+
+    # Tradier (feed muestreado): ve 900 -> no llega al tope -> ENTRA (filtra de MENOS)
+    obs_t = ObservadorMovimiento(ahora=reloj)
+    obs_t.observar(["ACTIVA"])
+    reloj.avanzar(20)
+    for _ in range(6):
+        obs_t.anotar_operacion("ACTIVA", 150)          # 900 acciones
+    m_t = BotEngine(b7, cfg7, log=lambda m: print(f"      {m}"), observador=obs_t)
+    print("   Tradier (muestreado) ve 900 acciones, tope 1000:")
+    pasa7 = m_t._movimiento_ok("ACTIVA", 0.05)
+
+    ok7 = saltea7 and pasa7
+    print("   -> " + ("OK: filtra de MENOS en Tradier, nunca de mas (es un MAXIMO)"
+                      if ok7 else "*** FALLO"))
+    print()
+
+    todo = ok1 and ok1b and ok2 and ok3 and ok4 and ok5 and ok6 and ok7
     print("=" * 72)
     print("OK: el filtro de movimiento funciona con ventana deslizante."
           if todo else "*** HAY FALLOS.")

@@ -256,7 +256,8 @@ class MainWindow(QMainWindow):
         # cuantas veces se movio el bid/ask de cada simbolo antes de que el bot llegue
         filtra_movimiento = (config.max_cambios_bid is not None
                              or config.max_cambios_ask is not None
-                             or config.max_spread_pct is not None)
+                             or config.max_spread_pct is not None
+                             or config.max_volumen_seg is not None)
         if self._stream is not None and filtra_movimiento:
             self._observador.observar(symbols)
             self._stream.set_watchlist(symbols)
@@ -395,12 +396,17 @@ class MainWindow(QMainWindow):
         self._stream.quote.connect(self.ladder.actualizar_quote)
         # Time & Sales: el mismo stream ya abierto trae las operaciones ejecutadas
         self._stream.quote.connect(self.tape.actualizar_quote)
+        self._stream.trade.connect(self._anotar_operacion)
         self._stream.trade.connect(self.tape.agregar_trade)
         self.control.append_log("Streaming en vivo activo (produccion, SOLO lectura de precios).")
 
     def _anotar_movimiento(self, sym, bid, ask, *resto) -> None:
         """Cada quote del streaming alimenta al observador de movimiento."""
         self._observador.anotar(sym, bid, ask)
+
+    def _anotar_operacion(self, sym, precio, cantidad, *resto) -> None:
+        """Cada operacion del streaming alimenta el volumen reciente del observador."""
+        self._observador.anotar_operacion(sym, cantidad)
 
     def _arrancar_avisos(self) -> None:
         """Canal de avisos del broker: cuando una orden cambia de estado, refresca

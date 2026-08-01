@@ -87,6 +87,12 @@ class EngineConfig:
     # None = filtro apagado.
     max_spread_pct: float | None = None
     ventana_spread_s: float = 30.0
+    # Filtro de VOLUMEN RECIENTE: acciones operadas en los ultimos X segundos. Si se
+    # paso del tope, saltea (demasiada actividad). Es un MAXIMO a proposito: el feed
+    # de Tradier viene muestreado y cuenta de menos, y con un maximo eso solo hace
+    # que filtre de MENOS (nunca saltea de mas). None = apagado.
+    max_volumen_seg: int | None = None
+    ventana_volumen_s: float = 30.0
     volume_min: int | None = None       # filtro de volumen operado en el dia, en
     volume_max: int | None = None       # acciones (None = sin limite por ese lado)
     duration: Duration = Duration.DAY   # por defecto DAY
