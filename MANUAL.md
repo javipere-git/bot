@@ -354,8 +354,12 @@ la posicion este cerrada. (Si ya estabas mirando ese mismo simbolo, no se toca n
   misma** (se pierde el sombreado de las columnas), las barras de desplazamiento se
   dibujan **blancas** y el texto se ve como en **negrita**. El fondo y el color de la
   grilla se ponen por PALETA del widget (`Base` y `Mid`) en `estado_ui.estilo_tabla()`.
-  Consecuencia conocida: la grilla es de 1 pixel y su grosor no se puede cambiar, asi
-  que se compensa con un color de linea mas contrastado.
+  Y OJO con la grilla: el estilo **Fusion IGNORA la paleta** para las lineas y usa un
+  color propio sacado del fondo (medido: sobre el fondo oscuro usaba `#323436`, que es
+  casi el fondo mismo -> invisible). Por eso las lineas las dibuja un delegado propio
+  (`_LineasDelegate`), que apaga la grilla nativa y traza el borde de cada celda con el
+  color de `colores("borde")`. El test lo comprueba **dibujando la tabla y leyendo los
+  pixeles**, no mirando la paleta: la paleta decia una cosa y la pantalla mostraba otra.
 - El tema se aplica **antes** de construir los paneles: si se aplica despues, las
   tablas se arman con la paleta clara y los encabezados quedan blancos.
 - **"Cancelar todo"**: cancela TODAS las ordenes abiertas de la cuenta (util si el

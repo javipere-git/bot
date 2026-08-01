@@ -18,8 +18,8 @@ El estado se guarda por maquina y por usuario (QSettings), no en el repo.
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, QSettings, QTimer
-from PySide6.QtGui import QPalette
-from PySide6.QtWidgets import QHeaderView
+from PySide6.QtGui import QPalette, QPen
+from PySide6.QtWidgets import QHeaderView, QStyledItemDelegate
 
 _AJUSTES = QSettings("BotTrading", "columnas")
 
@@ -137,6 +137,32 @@ def poner_fuente(widget, tamano_px: int) -> None:
     widget.setFont(f)
 
 
+class _LineasDelegate(QStyledItemDelegate):
+    """Dibuja los bordes de cada celda con un color propio.
+
+    Hace falta porque el estilo Fusion IGNORA la paleta para la grilla: calcula su
+    propio color a partir del fondo (medido: sobre el fondo oscuro #33363a usaba
+    #323436, practicamente invisible). Con esto elegimos el color de verdad.
+
+    Solo AGREGA las lineas: primero deja que se dibuje la celda normal (con su color
+    de fondo y su texto, que en el ladder es lo que da el sombreado de las columnas)
+    y despues pinta el borde encima.
+    """
+
+    def __init__(self, color, parent=None) -> None:
+        super().__init__(parent)
+        self._pluma = QPen(color, 1)
+
+    def paint(self, painter, option, index) -> None:
+        super().paint(painter, option, index)    # la celda de siempre, intacta
+        painter.save()
+        painter.setPen(self._pluma)
+        r = option.rect
+        painter.drawLine(r.bottomLeft(), r.bottomRight())   # separacion de filas
+        painter.drawLine(r.topRight(), r.bottomRight())     # separacion de columnas
+        painter.restore()
+
+
 def estilo_tabla(tabla, fondo_propio=None) -> None:
     """Fondo propio y lineas divisorias visibles, SIN hojas de estilo.
 
@@ -145,17 +171,18 @@ def estilo_tabla(tabla, fondo_propio=None) -> None:
     las columnas del ladder. Y ademas las barras de desplazamiento pasaban a dibujarse
     con el estilo por defecto (blancas) y el texto se veia como en negrita.
 
-    Con la PALETA del widget se consigue lo mismo sin romper nada:
-      - Base  -> el fondo de la tabla
-      - Mid   -> el color de las lineas de la grilla (asi las dibuja Qt)
+    El fondo va por la PALETA del widget. Las lineas, por un dibujante propio: el
+    estilo Fusion ignora la paleta para la grilla y usa un color casi igual al fondo.
     """
     from .tema import colores          # import tardio (evita ciclo)
 
-    pal = QPalette(tabla.palette())
     if fondo_propio is not None:
+        pal = QPalette(tabla.palette())
         pal.setColor(QPalette.Base, fondo_propio)
         pal.setColor(QPalette.AlternateBase, fondo_propio)
-    pal.setColor(QPalette.Mid, colores("borde"))     # lineas de la grilla
-    tabla.setPalette(pal)
-    tabla.setShowGrid(True)
-    tabla.setGridStyle(Qt.SolidLine)
+        tabla.setPalette(pal)
+    # la grilla nativa se apaga: la dibuja el delegado, con el color que elegimos
+    tabla.setShowGrid(False)
+    delegado = _LineasDelegate(colores("borde"), tabla)
+    tabla.setItemDelegate(delegado)
+    tabla._delegado_lineas = delegado      # guardar la referencia (si no, se descarta)

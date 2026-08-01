@@ -181,19 +181,30 @@ def main() -> bool:
               f"{t.styleSheet()[:30]!r} (esperada vacia)")
     print(f"   -> {'OK' if ok7 else '*** FALLO'}" + chr(10))
 
-    print("8) Las lineas divisorias se distinguen del fondo de la tabla")
-    # El color de la grilla sale de QPalette.Mid del widget (de ahi lo toma Qt).
-    # Si el contraste baja, las divisiones de filas y columnas se pierden.
+    print("8) Las lineas divisorias se ven DE VERDAD (se leen los pixeles)")
+    # No alcanza con mirar la paleta: el estilo Fusion IGNORA QPalette.Mid y usa su
+    # propio color (sobre el fondo oscuro daba #323436, invisible). Por eso las lineas
+    # las dibuja un delegado propio, y aca se comprueba DIBUJANDO la tabla y leyendo
+    # el color del pixel del borde.
+    from PySide6.QtGui import QPixmap
     ok8 = True
     for nombre, t in (("ladder", w.ladder.tabla), ("Time & Sales", w.tape.tabla),
                       ("ordenes", w.monitor.tbl_ord)):
-        linea = t.palette().color(QPalette.Mid)
-        fondo_t = t.palette().color(QPalette.Base)
-        contraste = abs(_luminancia(linea) - _luminancia(fondo_t))
+        if t.rowCount() == 0 or t.columnCount() == 0:
+            print(f"   -- {nombre:12} sin filas para medir")
+            continue
+        app.processEvents()
+        pm = QPixmap(t.viewport().size())
+        t.viewport().render(pm)
+        img = pm.toImage()
+        celda = t.visualRect(t.model().index(0, 0))
+        dentro = img.pixelColor(celda.center().x(), celda.center().y())
+        linea = img.pixelColor(celda.center().x(), celda.bottom())
+        contraste = abs(_luminancia(linea) - _luminancia(dentro))
         bien = contraste >= 0.20
         ok8 = ok8 and bien
-        print(f"   {'OK ' if bien else '***'} {nombre:12} linea {linea.name()} sobre "
-              f"{fondo_t.name()} -> contraste {contraste:.2f} (minimo 0.20)")
+        print(f"   {'OK ' if bien else '***'} {nombre:12} celda {dentro.name()} / "
+              f"linea {linea.name()} -> contraste {contraste:.2f} (minimo 0.20)")
     print(f"   -> {'OK' if ok8 else '*** FALLO: no se distinguen'}" + chr(10))
 
     todo = ok1 and ok2 and ok3 and ok4 and ok5 and ok6 and ok7 and ok8

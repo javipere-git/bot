@@ -89,7 +89,8 @@ _CLAROS = {
     "amarillo": QColor("#ffe08a"),   # precio promedio
     "texto": QColor("#111111"),      # sobre esos pasteles, letra oscura
     "texto_best": QColor("#111111"),
-    "borde": QColor("#9b9b9b"),      # lineas divisorias (modo claro)
+    # el mismo tono que usaba Fusion por su cuenta: el modo claro ya se veia bien
+    "borde": QColor("#c7c7c7"),      # lineas divisorias (modo claro)
     "tape_verde": QColor("#1e7d34"),
     "tape_rojo": QColor("#b00020"),
     "tape_gris": QColor("#666666"),
