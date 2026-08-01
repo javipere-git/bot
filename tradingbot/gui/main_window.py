@@ -28,7 +28,12 @@ from .market_worker import MarketWorker
 from .ladder_panel import LadderPanel
 from .tape_panel import TapePanel
 from .perfiles import Perfil
-from .estado_ui import guardar_columnas, guardar_splitter, restaurar_splitter
+from .estado_ui import (
+    guardar_columnas,
+    guardar_splitter,
+    poner_titulo,
+    restaurar_splitter,
+)
 from .tema import aplicar_tema, es_oscuro
 from ..core.models import OrderStatus, Side
 from ..core.observador_movimiento import ObservadorMovimiento
@@ -57,7 +62,7 @@ def _zona(titulo: str, descripcion: str) -> QFrame:
     lay.setContentsMargins(8, 8, 8, 8)
 
     t = QLabel(titulo)
-    t.setStyleSheet("font-weight: bold; font-size: 13px;")
+    poner_titulo(t)
     desc = QLabel(descripcion)
     desc.setWordWrap(True)
     desc.setAlignment(Qt.AlignTop | Qt.AlignLeft)
@@ -466,6 +471,10 @@ class MainWindow(QMainWindow):
     def _cambiar_tema(self) -> None:
         aplicar_tema(not es_oscuro())
         self._actualizar_boton_tema()
+        # el ladder y la cinta pintan sus celdas a mano: hay que redibujarlas para
+        # que tomen los colores del tema nuevo
+        self.ladder.repintar_por_tema()
+        self.tape.repintar_por_tema()
 
     def _actualizar_boton_tema(self) -> None:
         self.btn_tema.setText("Modo claro" if es_oscuro() else "Modo oscuro")

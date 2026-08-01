@@ -23,7 +23,12 @@ class CollapsibleSection(QWidget):
         self._btn.setChecked(True)
         self._btn.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
         self._btn.setArrowType(Qt.DownArrow)
-        self._btn.setStyleSheet("QToolButton { border: none; font-weight: bold; }")
+        # sin hoja de estilo: con ella, Qt descarta la paleta y el titulo sale NEGRO
+        # (ilegible en modo oscuro). El borde se saca con setAutoRaise.
+        self._btn.setAutoRaise(True)
+        _f = self._btn.font()
+        _f.setBold(True)
+        self._btn.setFont(_f)
         self._btn.clicked.connect(self._toggle)
 
         self._content = QWidget()

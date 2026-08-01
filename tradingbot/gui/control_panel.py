@@ -42,6 +42,7 @@ from ..core.config import (
 )
 from ..core.models import Side
 from ..core.watchlist import parse_watchlist
+from .estado_ui import poner_titulo
 
 
 def _spin(minimum, maximum, value, decimals=2, step=0.01, suffix=""):
@@ -66,7 +67,7 @@ class ControlPanel(QWidget):
         root.setSpacing(6)
 
         titulo = QLabel("Control del bot")
-        titulo.setStyleSheet("font-weight: bold; font-size: 13px;")
+        poner_titulo(titulo)
         root.addWidget(titulo)
 
         # --- zona scrolleable con toda la configuracion ---

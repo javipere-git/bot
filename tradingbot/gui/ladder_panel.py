@@ -42,13 +42,18 @@ from PySide6.QtWidgets import (
 )
 
 from ..core.models import OrderRequest, OrderType, Side
-from .estado_ui import cantidades_botones, guardar_cantidades_botones, preparar_columnas
+from .tema import colores
+from .estado_ui import (
+    cantidades_botones,
+    guardar_cantidades_botones,
+    poner_fuente,
+    poner_titulo,
+    preparar_columnas,
+)
 
 C_BUY, C_BID, C_PRICE, C_ASK, C_SELL = range(5)
-VERDE = QColor("#cdeccd")
-ROJO = QColor("#f2cccc")
-AZUL = QColor("#cfe0f5")     # mis ordenes
-AMARILLO = QColor("#ffe08a")  # marca del precio promedio
+# Los colores dependen del tema (ver gui/tema.py): pasteles con letra oscura en modo
+# claro; tonos saturados con letra clara en modo oscuro (estilo ThinkorSwim).
 _BUY_SIDES = (Side.BUY, Side.BUY_TO_COVER)
 
 
@@ -145,7 +150,7 @@ class LadderPanel(QWidget):
         lay.setContentsMargins(6, 6, 6, 6)
 
         titulo = QLabel("Ladder")
-        titulo.setStyleSheet("font-weight: bold; font-size: 13px;")
+        poner_titulo(titulo)
         lay.addWidget(titulo)
 
         # --- simbolo ---
@@ -257,7 +262,7 @@ class LadderPanel(QWidget):
         self.tabla.verticalHeader().setDefaultSectionSize(18)
         self.tabla.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.tabla.setSelectionMode(QAbstractItemView.NoSelection)
-        self.tabla.setStyleSheet("font-size: 11px;")
+        poner_fuente(self.tabla, 9)
         preparar_columnas(self.tabla, "ladder")
         self.tabla.cellClicked.connect(self._click_celda)
         self.tabla.orderMoved.connect(self._mover_orden)
@@ -423,11 +428,11 @@ class LadderPanel(QWidget):
             lvl = top_lvl - i
             precio = lvl * step_c / 100
             self._set(i, C_PRICE, f"{precio:.2f}", bold=True,
-                      bg=AMARILLO if lvl == avg_lvl else None)
+                      bg=colores("amarillo") if lvl == avg_lvl else None)
             self._set(i, C_BID, str(int(bidsize)) if lvl == bid_lvl else "",
-                      bg=VERDE if lvl == bid_lvl else None)
+                      bg=colores("verde") if lvl == bid_lvl else None)
             self._set(i, C_ASK, str(int(asksize)) if lvl == ask_lvl else "",
-                      bg=ROJO if lvl == ask_lvl else None)
+                      bg=colores("rojo") if lvl == ask_lvl else None)
             self._set_orden(i, C_BUY, buy_lvl.get(lvl))
             self._set_orden(i, C_SELL, sell_lvl.get(lvl))
             if lvl == (bid_lvl + ask_lvl) // 2:
@@ -464,9 +469,9 @@ class LadderPanel(QWidget):
             it.setFont(f)
         if bg is not None:
             it.setBackground(QBrush(bg))
-            # los fondos son pasteles claros: el texto va oscuro SIEMPRE, para que
-            # se lea igual en modo claro y en modo oscuro
-            it.setForeground(QBrush(QColor("#111111")))
+            # el color del texto lo decide el tema: oscuro sobre los pasteles del modo
+            # claro, claro sobre los tonos saturados del modo oscuro
+            it.setForeground(QBrush(colores("texto")))
         self.tabla.setItem(row, col, it)
 
     def _set_orden(self, row, col, datos) -> None:
@@ -477,7 +482,7 @@ class LadderPanel(QWidget):
         it = QTableWidgetItem(f"{qty}   [X]")
         it.setTextAlignment(Qt.AlignCenter)
         it.setToolTip("Click para cancelar esta orden")
-        it.setBackground(QBrush(AZUL))
+        it.setBackground(QBrush(colores("azul")))
         it.setData(Qt.UserRole, ids)
         self.tabla.setItem(row, col, it)
 
@@ -513,6 +518,11 @@ class LadderPanel(QWidget):
             self.spin_size.setValue(int(boton.text()))
         except ValueError:
             pass
+
+    def repintar_por_tema(self) -> None:
+        """Redibuja la escalera con los colores del tema activo."""
+        self._pendiente = True
+        self._repintar()
 
     def _cargar_cantidades(self) -> None:
         """Pone en los cuatro botones las cantidades guardadas (o las de fabrica)."""

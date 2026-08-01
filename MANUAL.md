@@ -330,7 +330,17 @@ la posicion este cerrada. (Si ya estabas mirando ese mismo simbolo, no se toca n
 - **Ancho de cada seccion**: los divisores entre Control / Monitoreo / Ladder /
   Time & Sales tambien se recuerdan: como los dejes, asi vuelven al abrir.
 - **Modo oscuro**: boton arriba a la izquierda, en el banner. Cambia toda la app y
-  la eleccion se recuerda.
+  la eleccion se recuerda. El ladder y la cinta usan tonos saturados estilo
+  ThinkorSwim (verde/rojo oscuros con letra clara); en modo claro vuelven a los
+  pasteles con letra oscura.
+
+  **Regla para no romperlo** (costo un rato entenderlo): NO usar `setStyleSheet` para
+  cambiar letra o tamano. Poner una hoja de estilo, aunque sea solo
+  `"font-size: 11px"`, hace que Qt **descarte la paleta** para ese widget: los titulos
+  salen NEGROS sobre fondo oscuro y las tablas quedan BLANCAS. Para eso estan
+  `poner_titulo()` y `poner_fuente()` en `gui/estado_ui.py`, que usan QFont. Si hace
+  falta una hoja de estilo si o si, hay que escribirle el color explicito.
+  El test `examples/verificar_modo_oscuro.py` revisa que no se cuele ninguna.
 - **"Cancelar todo"**: cancela TODAS las ordenes abiertas de la cuenta (util si el
   precio se mueve rapido y cuesta encontrar la orden en la escalera).
 - El BID/ASK grandes arriba muestran el NBBO claramente.

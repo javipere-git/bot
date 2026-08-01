@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..core.models import OrderStatus
-from .estado_ui import preparar_columnas
+from .estado_ui import poner_titulo, preparar_columnas
 from .widgets import CollapsibleSection
 
 
@@ -69,11 +69,11 @@ class MonitorPanel(QWidget):
         lay.setContentsMargins(6, 6, 6, 6)
 
         titulo = QLabel("Monitoreo")
-        titulo.setStyleSheet("font-weight: bold; font-size: 13px;")
+        poner_titulo(titulo)
         lay.addWidget(titulo)
 
         self.lbl_pnl = QLabel("P/L del dia: --")
-        self.lbl_pnl.setStyleSheet("font-weight: bold; font-size: 14px;")
+        poner_titulo(self.lbl_pnl, 14)
         self.lbl_pnl.setWordWrap(True)
         lay.addWidget(self.lbl_pnl)
         self.lbl_pnl_detalle = QLabel("")

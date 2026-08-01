@@ -22,8 +22,9 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
+from tradingbot.gui.tema import colores  # noqa: E402
 from tradingbot.gui.tape_panel import (  # noqa: E402
-    C_CANT, C_EXCH, C_HORA, C_PRECIO, GRIS, ROJO, VERDE, TapePanel,
+    C_CANT, C_EXCH, C_HORA, C_PRECIO, TapePanel,
 )
 
 
@@ -58,6 +59,8 @@ def main() -> None:
     t._volcar()
     # la mas nueva arriba: fila 0 = la de 100.05
     c_dentro, c_bid, c_ask = color(t, 0), color(t, 1), color(t, 2)
+    VERDE, ROJO, GRIS = (colores("tape_verde"), colores("tape_rojo"),
+                         colores("tape_gris"))     # dependen del tema activo
     ok2 = (c_ask == VERDE.name() and c_bid == ROJO.name() and c_dentro == GRIS.name())
     print(f"   en el ask (100.10): {c_ask}  = verde {VERDE.name()}")
     print(f"   en el bid (100.00): {c_bid}  = rojo  {ROJO.name()}")

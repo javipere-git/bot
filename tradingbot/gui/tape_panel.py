@@ -22,7 +22,8 @@ from datetime import datetime
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QBrush, QColor
-from .estado_ui import preparar_columnas
+from .tema import colores
+from .estado_ui import poner_fuente, poner_titulo, preparar_columnas
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QHeaderView,
@@ -34,9 +35,8 @@ from PySide6.QtWidgets import (
 )
 
 C_HORA, C_PRECIO, C_CANT, C_EXCH = range(4)
-VERDE = QColor("#1e7d34")
-ROJO = QColor("#b00020")
-GRIS = QColor("#666666")
+# los colores dependen del tema (ver gui/tema.py): en modo oscuro son mas brillantes
+# para que se lean sobre el fondo
 
 # Codigos de exchange (una letra) -> nombre, para el cartelito de ayuda.
 # Ojo: el codigo depende del feed. En el feed de Blue Ocean (overnight) la "B"
@@ -65,7 +65,7 @@ class TapePanel(QWidget):
         lay.setContentsMargins(6, 6, 6, 6)
 
         titulo = QLabel("Time & Sales")
-        titulo.setStyleSheet("font-weight: bold; font-size: 13px;")
+        poner_titulo(titulo)
         lay.addWidget(titulo)
 
         self.tabla = QTableWidget(0, 4)
@@ -74,7 +74,7 @@ class TapePanel(QWidget):
         self.tabla.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.tabla.setSelectionBehavior(QAbstractItemView.SelectRows)
         preparar_columnas(self.tabla, "time_and_sales")
-        self.tabla.setStyleSheet("font-size: 11px;")
+        poner_fuente(self.tabla, 9)
         self.tabla.verticalHeader().setDefaultSectionSize(18)
         lay.addWidget(self.tabla, 1)
 
@@ -84,6 +84,24 @@ class TapePanel(QWidget):
         self._timer.start()
 
     # ---------- entradas ----------
+    def repintar_por_tema(self) -> None:
+        """Repinta las filas ya cargadas con los colores del tema activo. Solo cambia
+        el tono (verde/rojo/gris): no toca los datos ni el orden."""
+        equivalencias = {
+            "#1e7d34": "tape_verde", "#4cd07a": "tape_verde",
+            "#b00020": "tape_rojo", "#ff6b7a": "tape_rojo",
+        }
+        for fila in range(self.tabla.rowCount()):
+            it_precio = self.tabla.item(fila, C_PRECIO)
+            if it_precio is None:
+                continue
+            actual = it_precio.foreground().color().name().lower()
+            nuevo = QBrush(colores(equivalencias.get(actual, "tape_gris")))
+            for col in range(self.tabla.columnCount()):
+                it = self.tabla.item(fila, col)
+                if it is not None:
+                    it.setForeground(nuevo)
+
     def set_symbol(self, sym: str) -> None:
         """Cambia el simbolo que se sigue y limpia la cinta."""
         self._symbol = (sym or "").strip().upper()
@@ -100,13 +118,13 @@ class TapePanel(QWidget):
         """Una operacion ejecutada. Se guarda y se vuelca en el proximo lote."""
         if symbol != self._symbol or precio <= 0:
             return
-        color = GRIS
+        color = colores("tape_gris")
         if self._nbbo:
             bid, ask = self._nbbo
             if precio >= ask:
-                color = VERDE
+                color = colores("tape_verde")
             elif precio <= bid:
-                color = ROJO
+                color = colores("tape_rojo")
         self._pendientes.append((epoch, precio, cantidad, exch, color))
 
     # ---------- volcado en lote ----------

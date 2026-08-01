@@ -17,7 +17,7 @@ El estado se guarda por maquina y por usuario (QSettings), no en el repo.
 """
 from __future__ import annotations
 
-from PySide6.QtCore import QSettings, QTimer
+from PySide6.QtCore import Qt, QSettings, QTimer
 from PySide6.QtWidgets import QHeaderView
 
 _AJUSTES = QSettings("BotTrading", "columnas")
@@ -29,6 +29,8 @@ def preparar_columnas(tabla, clave: str) -> None:
     cab.setSectionResizeMode(QHeaderView.Stretch)   # que entren todas de entrada
     cab.setMinimumSectionSize(16)   # con 7 columnas en un panel angosto, 24 no entraba
     cab.setSectionsMovable(True)                    # arrastrar para reordenar
+    tabla.setShowGrid(True)
+    tabla.setGridStyle(Qt.SolidLine)
     tabla.setMinimumWidth(0)
     tabla._clave_columnas = clave
 
@@ -109,3 +111,23 @@ def guardar_cantidades_botones(valores) -> None:
     limpias = [int(v) for v in valores if int(v) > 0][:4]
     if limpias:
         _AJUSTES.setValue("ladder/cantidades", [str(v) for v in limpias])
+
+
+def poner_titulo(label, tamano: int = 13) -> None:
+    """Deja una etiqueta en negrita y del tamano pedido SIN hoja de estilo.
+
+    Importante para el modo oscuro: si se usa setStyleSheet, Qt descarta la paleta
+    para ese widget y el texto sale NEGRO (ilegible sobre fondo oscuro).
+    """
+    f = label.font()
+    f.setBold(True)
+    f.setPointSize(tamano)
+    label.setFont(f)
+
+
+def poner_fuente(widget, tamano: int) -> None:
+    """Cambia el tamano de letra de un widget SIN hoja de estilo (ver poner_titulo).
+    Con setStyleSheet, una tabla queda con fondo BLANCO aunque el tema sea oscuro."""
+    f = widget.font()
+    f.setPointSize(tamano)
+    widget.setFont(f)
