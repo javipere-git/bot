@@ -475,6 +475,7 @@ class MainWindow(QMainWindow):
         # que tomen los colores del tema nuevo
         self.ladder.repintar_por_tema()
         self.tape.repintar_por_tema()
+        self.monitor.repintar_por_tema()
 
     def _actualizar_boton_tema(self) -> None:
         self.btn_tema.setText("Modo claro" if es_oscuro() else "Modo oscuro")

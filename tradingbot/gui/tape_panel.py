@@ -23,7 +23,7 @@ from datetime import datetime
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QBrush, QColor
 from .tema import colores
-from .estado_ui import poner_fuente, poner_titulo, preparar_columnas
+from .estado_ui import estilo_tabla, poner_fuente, poner_titulo, preparar_columnas
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QHeaderView,
@@ -74,7 +74,8 @@ class TapePanel(QWidget):
         self.tabla.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.tabla.setSelectionBehavior(QAbstractItemView.SelectRows)
         preparar_columnas(self.tabla, "time_and_sales")
-        poner_fuente(self.tabla, 9)
+        poner_fuente(self.tabla, 11)
+        estilo_tabla(self.tabla)
         self.tabla.verticalHeader().setDefaultSectionSize(18)
         lay.addWidget(self.tabla, 1)
 
@@ -87,6 +88,7 @@ class TapePanel(QWidget):
     def repintar_por_tema(self) -> None:
         """Repinta las filas ya cargadas con los colores del tema activo. Solo cambia
         el tono (verde/rojo/gris): no toca los datos ni el orden."""
+        estilo_tabla(self.tabla)
         equivalencias = {
             "#1e7d34": "tape_verde", "#4cd07a": "tape_verde",
             "#b00020": "tape_rojo", "#ff6b7a": "tape_rojo",

@@ -46,6 +46,7 @@ from .tema import colores
 from .estado_ui import (
     cantidades_botones,
     guardar_cantidades_botones,
+    estilo_tabla,
     poner_fuente,
     poner_titulo,
     preparar_columnas,
@@ -262,7 +263,8 @@ class LadderPanel(QWidget):
         self.tabla.verticalHeader().setDefaultSectionSize(18)
         self.tabla.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.tabla.setSelectionMode(QAbstractItemView.NoSelection)
-        poner_fuente(self.tabla, 9)
+        poner_fuente(self.tabla, 11)
+        estilo_tabla(self.tabla)   # fondo propio + lineas bien visibles
         preparar_columnas(self.tabla, "ladder")
         self.tabla.cellClicked.connect(self._click_celda)
         self.tabla.orderMoved.connect(self._mover_orden)
@@ -429,10 +431,17 @@ class LadderPanel(QWidget):
             precio = lvl * step_c / 100
             self._set(i, C_PRICE, f"{precio:.2f}", bold=True,
                       bg=colores("amarillo") if lvl == avg_lvl else None)
-            self._set(i, C_BID, str(int(bidsize)) if lvl == bid_lvl else "",
-                      bg=colores("verde") if lvl == bid_lvl else None)
-            self._set(i, C_ASK, str(int(asksize)) if lvl == ask_lvl else "",
-                      bg=colores("rojo") if lvl == ask_lvl else None)
+            # columnas sombreadas de punta a punta (estilo ThinkorSwim): la de compra
+            # en verde tenue y la de venta en rojo tenue, con el MEJOR bid y el MEJOR
+            # ask resaltados en el tono fuerte
+            es_best_bid = lvl == bid_lvl
+            es_best_ask = lvl == ask_lvl
+            self._set(i, C_BID, str(int(bidsize)) if es_best_bid else "",
+                      bg=colores("verde") if es_best_bid else colores("verde_col"),
+                      best=es_best_bid)
+            self._set(i, C_ASK, str(int(asksize)) if es_best_ask else "",
+                      bg=colores("rojo") if es_best_ask else colores("rojo_col"),
+                      best=es_best_ask)
             self._set_orden(i, C_BUY, buy_lvl.get(lvl))
             self._set_orden(i, C_SELL, sell_lvl.get(lvl))
             if lvl == (bid_lvl + ask_lvl) // 2:
@@ -460,7 +469,7 @@ class LadderPanel(QWidget):
         self._ancla = None
         self._repoblar()
 
-    def _set(self, row, col, text, bold=False, bg=None) -> None:
+    def _set(self, row, col, text, bold=False, bg=None, best=False) -> None:
         it = QTableWidgetItem(text)
         it.setTextAlignment(Qt.AlignCenter)
         if bold:
@@ -469,9 +478,9 @@ class LadderPanel(QWidget):
             it.setFont(f)
         if bg is not None:
             it.setBackground(QBrush(bg))
-            # el color del texto lo decide el tema: oscuro sobre los pasteles del modo
-            # claro, claro sobre los tonos saturados del modo oscuro
-            it.setForeground(QBrush(colores("texto")))
+            # el color del texto lo decide el tema; sobre el verde/rojo CHILLON del
+            # best bid/ask va letra oscura, que es lo que se lee
+            it.setForeground(QBrush(colores("texto_best" if best else "texto")))
         self.tabla.setItem(row, col, it)
 
     def _set_orden(self, row, col, datos) -> None:
@@ -521,6 +530,7 @@ class LadderPanel(QWidget):
 
     def repintar_por_tema(self) -> None:
         """Redibuja la escalera con los colores del tema activo."""
+        estilo_tabla(self.tabla)
         self._pendiente = True
         self._repintar()
 

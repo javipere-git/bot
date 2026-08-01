@@ -104,12 +104,16 @@ def main() -> bool:
     print(f"   -> {'OK' if ok2 else '*** FALLO: hay titulos ilegibles'}\n")
 
     print("3) El ladder y la cinta NO quedan en blanco")
+    # usan un fondo propio (fondo_ladder), a proposito mas TENUE que el resto de la
+    # app, pero igual oscuro. Lo que se verifica es que no queden claros.
+    propio = colores("fondo_ladder")
     ok3 = True
     for nombre, tabla in (("ladder", w.ladder.tabla), ("Time & Sales", w.tape.tabla)):
         c = tabla.palette().color(QPalette.Base)
-        bien = c == base and _luminancia(c) < 0.5
+        bien = _luminancia(c) < 0.5 and c.name() == propio.name()
         ok3 = ok3 and bien
-        print(f"   {'OK ' if bien else '***'} {nombre:12} fondo {c.name()} (esperado {base.name()})")
+        print(f"   {'OK ' if bien else '***'} {nombre:12} fondo {c.name()} "
+              f"(esperado {propio.name()}, mas tenue que el {base.name()} general)")
     print(f"   -> {'OK' if ok3 else '*** FALLO: quedaron claros'}\n")
 
     print("4) Los colores del ladder cambian con el tema y el texto contrasta")
@@ -127,7 +131,44 @@ def main() -> bool:
           f" (distinto del oscuro)")
     print(f"   -> {'OK' if ok4 else '*** FALLO'}\n")
 
-    todo = ok1 and ok2 and ok3 and ok4
+    print("5) Tamanos de letra: los de siempre (en PIXELES, no en puntos)")
+    aplicar_tema(True)
+    from PySide6.QtWidgets import QLabel as _QL
+    tam_ladder = w.ladder.tabla.font().pixelSize()
+    tam_tape = w.tape.tabla.font().pixelSize()
+    t_lad = next(x for x in w.ladder.findChildren(_QL) if x.text() == "Ladder")
+    tam_titulo = t_lad.font().pixelSize()
+    ok5 = tam_ladder == 11 and tam_tape == 11 and tam_titulo == 13
+    print(f"   tabla del ladder {tam_ladder}px, cinta {tam_tape}px (esperado 11)")
+    print(f"   titulo {tam_titulo}px (esperado 13)")
+    print(f"   -> {'OK' if ok5 else '*** FALLO: cambiaron de tamano'}" + chr(10))
+
+    print("6) Ladder: columnas sombreadas con el best bid/ask resaltado")
+    w.ladder.ed_symbol.setText("SPY")
+    w.ladder._cambiar_symbol()
+    w.ladder.actualizar_quote("SPY", 100.00, 100.10, 500, 400)
+    w.ladder._repintar()
+    from tradingbot.gui.ladder_panel import C_ASK, C_BID
+    hallados = {}
+    for r in range(w.ladder.tabla.rowCount()):
+        precio = w.ladder._precio_de_fila(r)
+        for objetivo, (col, nombre) in {
+            100.00: (C_BID, "best_bid"), 99.95: (C_BID, "col_bid"),
+            100.10: (C_ASK, "best_ask"), 100.20: (C_ASK, "col_ask"),
+        }.items():
+            if abs(precio - objetivo) < 0.001:
+                hallados[nombre] = w.ladder.tabla.item(r, col).background().color().name()
+    esperado = {
+        "best_bid": colores("verde").name(), "col_bid": colores("verde_col").name(),
+        "best_ask": colores("rojo").name(), "col_ask": colores("rojo_col").name(),
+    }
+    ok6 = hallados == esperado
+    for k, v in esperado.items():
+        bien = hallados.get(k) == v
+        print(f"   {'OK ' if bien else '***'} {k:9} {hallados.get(k)} (esperado {v})")
+    print(f"   -> {'OK' if ok6 else '*** FALLO'}" + chr(10))
+
+    todo = ok1 and ok2 and ok3 and ok4 and ok5 and ok6
     print("OK: el modo oscuro se lee bien en todos los paneles."
           if todo else "*** HAY FALLOS EN EL MODO OSCURO.")
     return todo

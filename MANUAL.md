@@ -340,7 +340,14 @@ la posicion este cerrada. (Si ya estabas mirando ese mismo simbolo, no se toca n
   salen NEGROS sobre fondo oscuro y las tablas quedan BLANCAS. Para eso estan
   `poner_titulo()` y `poner_fuente()` en `gui/estado_ui.py`, que usan QFont. Si hace
   falta una hoja de estilo si o si, hay que escribirle el color explicito.
-  El test `examples/verificar_modo_oscuro.py` revisa que no se cuele ninguna.
+  El test `examples/verificar_modo_oscuro.py` revisa que no se cuele ninguna, y
+  ademas que los tamanos de letra sigan siendo los de siempre. OJO: los tamanos van
+  en **pixeles** (`setPixelSize`), como las hojas de estilo viejas; con `setPointSize`
+  todo se agranda (13pt son ~17px).
+- **Colores del ladder**: las columnas de compra y venta van sombreadas de punta a
+  punta (verde y rojo tenues) con el **mejor bid y el mejor ask resaltados** en el
+  tono fuerte, estilo ThinkorSwim. El fondo del ladder es a proposito mas tenue que
+  el del resto de la app.
 - **"Cancelar todo"**: cancela TODAS las ordenes abiertas de la cuenta (util si el
   precio se mueve rapido y cuesta encontrar la orden en la escalera).
 - El BID/ASK grandes arriba muestran el NBBO claramente.

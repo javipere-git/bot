@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QBrush, QColor
+from PySide6.QtGui import QBrush, QColor, QPalette
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QHeaderView,
@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..core.models import OrderStatus
-from .estado_ui import poner_titulo, preparar_columnas
+from .estado_ui import estilo_tabla, poner_titulo, preparar_columnas
 from .widgets import CollapsibleSection
 
 
@@ -125,6 +125,7 @@ class MonitorPanel(QWidget):
         t.setSortingEnabled(True)  # click en el encabezado = ordenar
         # columnas: entran todas, ajustables, movibles y con memoria
         preparar_columnas(t, clave)
+        estilo_tabla(t, fondo_propio=t.palette().color(QPalette.Base))
         return t
 
     @staticmethod
@@ -161,6 +162,11 @@ class MonitorPanel(QWidget):
             it.setForeground(QBrush(QColor("#111111")))
             it.setToolTip("Orden de HORARIO EXTENDIDO (fuera de la rueda regular)")
         return it
+
+    def repintar_por_tema(self) -> None:
+        """Vuelve a aplicar el estilo de las tablas con los colores del tema activo."""
+        for t in (self.tbl_pos, self.tbl_ord, self.tbl_exec, self.tbl_canc):
+            estilo_tabla(t, fondo_propio=t.palette().color(QPalette.Base))
 
     def set_day_pnl(self, dia) -> None:
         """Muestra el resultado del DIA: total grande + desglose (realizado/abierto).

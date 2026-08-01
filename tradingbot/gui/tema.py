@@ -80,22 +80,32 @@ def es_oscuro() -> bool:
 # Colores que dependen del tema (ladder y cinta)
 # --------------------------------------------------------------------------
 _CLAROS = {
-    "verde": QColor("#cdeccd"),      # bid
-    "rojo": QColor("#f2cccc"),       # ask
+    "verde": QColor("#8fd69a"),      # BEST bid (resaltado)
+    "rojo": QColor("#f0a0a4"),       # BEST ask (resaltado)
+    "verde_col": QColor("#eaf6ea"),  # resto de la columna de compra (sombreado suave)
+    "rojo_col": QColor("#fbeceb"),   # resto de la columna de venta
+    "fondo_ladder": QColor("#ffffff"),
     "azul": QColor("#cfe0f5"),       # mis ordenes
     "amarillo": QColor("#ffe08a"),   # precio promedio
     "texto": QColor("#111111"),      # sobre esos pasteles, letra oscura
+    "texto_best": QColor("#111111"),
+    "borde": QColor("#b4b4b4"),
     "tape_verde": QColor("#1e7d34"),
     "tape_rojo": QColor("#b00020"),
     "tape_gris": QColor("#666666"),
 }
 
 _OSCUROS = {
-    "verde": QColor("#1f6b3a"),      # tonos saturados estilo ThinkorSwim
-    "rojo": QColor("#8f2530"),
+    "verde": QColor("#25c65c"),      # BEST bid: verde chillon (estilo ThinkorSwim)
+    "rojo": QColor("#e03e4e"),       # BEST ask: rojo chillon
+    "verde_col": QColor("#183a26"),  # resto de la columna: sombreado tenue
+    "rojo_col": QColor("#3a1d22"),
+    "fondo_ladder": QColor("#33363a"),   # menos negro que el resto de la app
     "azul": QColor("#2b5f96"),
     "amarillo": QColor("#8a6b1e"),
     "texto": QColor("#f2f2f2"),      # sobre esos tonos, letra clara
+    "texto_best": QColor("#0e1a12"),  # sobre el verde/rojo chillon, letra oscura
+    "borde": QColor("#5a6066"),      # lineas divisorias de las tablas
     "tape_verde": QColor("#4cd07a"),
     "tape_rojo": QColor("#ff6b7a"),
     "tape_gris": QColor("#a0a0a0"),

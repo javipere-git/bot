@@ -18,6 +18,7 @@ El estado se guarda por maquina y por usuario (QSettings), no en el repo.
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, QSettings, QTimer
+from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import QHeaderView
 
 _AJUSTES = QSettings("BotTrading", "columnas")
@@ -113,21 +114,47 @@ def guardar_cantidades_botones(valores) -> None:
         _AJUSTES.setValue("ladder/cantidades", [str(v) for v in limpias])
 
 
-def poner_titulo(label, tamano: int = 13) -> None:
+def poner_titulo(label, tamano_px: int = 13) -> None:
     """Deja una etiqueta en negrita y del tamano pedido SIN hoja de estilo.
 
     Importante para el modo oscuro: si se usa setStyleSheet, Qt descarta la paleta
     para ese widget y el texto sale NEGRO (ilegible sobre fondo oscuro).
+
+    El tamano va en PIXELES, igual que las hojas de estilo que habia antes
+    ("font-size: 13px"). Usar puntos agranda todo (13pt son ~17px).
     """
     f = label.font()
     f.setBold(True)
-    f.setPointSize(tamano)
+    f.setPixelSize(tamano_px)
     label.setFont(f)
 
 
-def poner_fuente(widget, tamano: int) -> None:
+def poner_fuente(widget, tamano_px: int) -> None:
     """Cambia el tamano de letra de un widget SIN hoja de estilo (ver poner_titulo).
     Con setStyleSheet, una tabla queda con fondo BLANCO aunque el tema sea oscuro."""
     f = widget.font()
-    f.setPointSize(tamano)
+    f.setPixelSize(tamano_px)
     widget.setFont(f)
+
+
+def estilo_tabla(tabla, fondo_propio=None) -> None:
+    """Lineas divisorias BIEN visibles (y opcionalmente un fondo propio).
+
+    Se usa hoja de estilo porque el grosor/color de la grilla no sale de la paleta,
+    pero se escriben los colores EXPLICITOS (fondo, texto, borde) para no perder el
+    tema -si no, Qt deja la tabla en blanco; ver gui/tema.py-.
+    """
+    from .tema import colores          # import tardio (evita ciclo)
+
+    borde = colores("borde").name()
+    fondo = (fondo_propio or colores("fondo_ladder")).name()
+    texto = tabla.palette().color(QPalette.Text).name()
+    tabla.setStyleSheet(
+        f"QTableView {{ background-color: {fondo}; color: {texto}; "
+        f"gridline-color: {borde}; }}"
+        # el borde por celda engrosa la separacion (la grilla sola es de 1 pixel)
+        f"QTableView::item {{ border-right: 1px solid {borde}; "
+        f"border-bottom: 1px solid {borde}; }}"
+        f"QHeaderView::section {{ background-color: {fondo}; color: {texto}; "
+        f"border: 1px solid {borde}; }}"
+    )
