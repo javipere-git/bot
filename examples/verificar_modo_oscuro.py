@@ -168,7 +168,20 @@ def main() -> bool:
         print(f"   {'OK ' if bien else '***'} {k:9} {hallados.get(k)} (esperado {v})")
     print(f"   -> {'OK' if ok6 else '*** FALLO'}" + chr(10))
 
-    todo = ok1 and ok2 and ok3 and ok4 and ok5 and ok6
+    print("7) Las tablas NO llevan hoja de estilo (si no, se rompe todo)")
+    # Con una hoja de estilo en QTableView::item, Qt ignora el color propio de cada
+    # celda (se pierde el sombreado), las barras de desplazamiento se dibujan blancas
+    # y el texto se ve como en negrita. El fondo y la grilla van por PALETA.
+    ok7 = True
+    for nombre, t in (("ladder", w.ladder.tabla), ("Time & Sales", w.tape.tabla),
+                      ("ordenes", w.monitor.tbl_ord)):
+        limpia = t.styleSheet() == ""
+        ok7 = ok7 and limpia
+        print(f"   {'OK ' if limpia else '***'} {nombre:12} hoja de estilo: "
+              f"{t.styleSheet()[:30]!r} (esperada vacia)")
+    print(f"   -> {'OK' if ok7 else '*** FALLO'}" + chr(10))
+
+    todo = ok1 and ok2 and ok3 and ok4 and ok5 and ok6 and ok7
     print("OK: el modo oscuro se lee bien en todos los paneles."
           if todo else "*** HAY FALLOS EN EL MODO OSCURO.")
     return todo

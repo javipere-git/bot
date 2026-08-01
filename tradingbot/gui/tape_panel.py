@@ -75,7 +75,7 @@ class TapePanel(QWidget):
         self.tabla.setSelectionBehavior(QAbstractItemView.SelectRows)
         preparar_columnas(self.tabla, "time_and_sales")
         poner_fuente(self.tabla, 11)
-        estilo_tabla(self.tabla)
+        estilo_tabla(self.tabla, colores("fondo_ladder"))
         self.tabla.verticalHeader().setDefaultSectionSize(18)
         lay.addWidget(self.tabla, 1)
 
@@ -88,7 +88,7 @@ class TapePanel(QWidget):
     def repintar_por_tema(self) -> None:
         """Repinta las filas ya cargadas con los colores del tema activo. Solo cambia
         el tono (verde/rojo/gris): no toca los datos ni el orden."""
-        estilo_tabla(self.tabla)
+        estilo_tabla(self.tabla, colores("fondo_ladder"))
         equivalencias = {
             "#1e7d34": "tape_verde", "#4cd07a": "tape_verde",
             "#b00020": "tape_rojo", "#ff6b7a": "tape_rojo",

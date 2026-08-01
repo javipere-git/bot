@@ -93,6 +93,11 @@ _CLAROS = {
     "tape_verde": QColor("#1e7d34"),
     "tape_rojo": QColor("#b00020"),
     "tape_gris": QColor("#666666"),
+    "boton_compra": QColor("#1e7d34"),
+    "boton_compra_hover": QColor("#25994080"[:7]),
+    "boton_venta": QColor("#b00020"),
+    "boton_venta_hover": QColor("#d0142c"),
+    "boton_texto": QColor("#ffffff"),
 }
 
 _OSCUROS = {
@@ -109,6 +114,11 @@ _OSCUROS = {
     "tape_verde": QColor("#4cd07a"),
     "tape_rojo": QColor("#ff6b7a"),
     "tape_gris": QColor("#a0a0a0"),
+    "boton_compra": QColor("#1f8a45"),
+    "boton_compra_hover": QColor("#28a353"),
+    "boton_venta": QColor("#b52b39"),
+    "boton_venta_hover": QColor("#d13443"),
+    "boton_texto": QColor("#ffffff"),
 }
 
 

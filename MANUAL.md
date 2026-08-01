@@ -348,6 +348,16 @@ la posicion este cerrada. (Si ya estabas mirando ese mismo simbolo, no se toca n
   punta (verde y rojo tenues) con el **mejor bid y el mejor ask resaltados** en el
   tono fuerte, estilo ThinkorSwim. El fondo del ladder es a proposito mas tenue que
   el del resto de la app.
+- **Botones "Comprar al ask" / "Vender al bid"**: verde y rojo en los dos temas.
+- **REGLA IMPORTANTE - nada de hojas de estilo en las TABLAS**. Se probo y salio mal:
+  si se estila `QTableView::item`, Qt **ignora el color que cada celda se puso a si
+  misma** (se pierde el sombreado de las columnas), las barras de desplazamiento se
+  dibujan **blancas** y el texto se ve como en **negrita**. El fondo y el color de la
+  grilla se ponen por PALETA del widget (`Base` y `Mid`) en `estado_ui.estilo_tabla()`.
+  Consecuencia conocida: la grilla es de 1 pixel y su grosor no se puede cambiar, asi
+  que se compensa con un color de linea mas contrastado.
+- El tema se aplica **antes** de construir los paneles: si se aplica despues, las
+  tablas se arman con la paleta clara y los encabezados quedan blancos.
 - **"Cancelar todo"**: cancela TODAS las ordenes abiertas de la cuenta (util si el
   precio se mueve rapido y cuesta encontrar la orden en la escalera).
 - El BID/ASK grandes arriba muestran el NBBO claramente.

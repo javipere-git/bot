@@ -125,7 +125,7 @@ class MonitorPanel(QWidget):
         t.setSortingEnabled(True)  # click en el encabezado = ordenar
         # columnas: entran todas, ajustables, movibles y con memoria
         preparar_columnas(t, clave)
-        estilo_tabla(t, fondo_propio=t.palette().color(QPalette.Base))
+        estilo_tabla(t)
         return t
 
     @staticmethod
@@ -166,7 +166,7 @@ class MonitorPanel(QWidget):
     def repintar_por_tema(self) -> None:
         """Vuelve a aplicar el estilo de las tablas con los colores del tema activo."""
         for t in (self.tbl_pos, self.tbl_ord, self.tbl_exec, self.tbl_canc):
-            estilo_tabla(t, fondo_propio=t.palette().color(QPalette.Base))
+            estilo_tabla(t)
 
     def set_day_pnl(self, dia) -> None:
         """Muestra el resultado del DIA: total grande + desglose (realizado/abierto).

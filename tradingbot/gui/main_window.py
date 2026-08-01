@@ -77,6 +77,10 @@ def _zona(titulo: str, descripcion: str) -> QFrame:
 class MainWindow(QMainWindow):
     def __init__(self, perfil: Perfil) -> None:
         super().__init__()
+        # El tema va PRIMERO: los paneles leen la paleta al construirse, asi que si
+        # se aplica despues, los encabezados de las tablas quedan con los colores
+        # del tema claro (blancos sobre fondo oscuro).
+        aplicar_tema(es_oscuro())
         self._perfil = perfil
         es_paper = not perfil.es_live
 
@@ -175,7 +179,6 @@ class MainWindow(QMainWindow):
         self._conexion_timer.start()
         self._actualizar_conexion()
 
-        aplicar_tema(es_oscuro())          # el tema que elegiste la vez pasada
         self._actualizar_boton_tema()
 
     # ---------- control del bot (en hilo aparte) ----------

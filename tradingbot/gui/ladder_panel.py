@@ -252,6 +252,7 @@ class LadderPanel(QWidget):
         self.btn_buy_ask.clicked.connect(self._comprar_al_ask)
         self.btn_sell_bid = QPushButton("Vender al bid")
         self.btn_sell_bid.clicked.connect(self._vender_al_bid)
+        self._pintar_botones()
         fila_mkt.addWidget(self.btn_buy_ask)
         fila_mkt.addWidget(self.btn_sell_bid)
         lay.addLayout(fila_mkt)
@@ -264,7 +265,7 @@ class LadderPanel(QWidget):
         self.tabla.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.tabla.setSelectionMode(QAbstractItemView.NoSelection)
         poner_fuente(self.tabla, 11)
-        estilo_tabla(self.tabla)   # fondo propio + lineas bien visibles
+        estilo_tabla(self.tabla, colores("fondo_ladder"))
         preparar_columnas(self.tabla, "ladder")
         self.tabla.cellClicked.connect(self._click_celda)
         self.tabla.orderMoved.connect(self._mover_orden)
@@ -528,9 +529,25 @@ class LadderPanel(QWidget):
         except ValueError:
             pass
 
+    def _pintar_botones(self) -> None:
+        """Comprar en verde y vender en rojo, en los dos temas. Aca SI va hoja de
+        estilo (es la unica forma de pintar un boton), pero con los colores escritos
+        explicitamente para no depender de la paleta."""
+        for boton, clave in ((self.btn_buy_ask, "boton_compra"),
+                             (self.btn_sell_bid, "boton_venta")):
+            fondo = colores(clave).name()
+            letra = colores("boton_texto").name()
+            boton.setStyleSheet(
+                f"QPushButton {{ background-color: {fondo}; color: {letra}; "
+                f"font-weight: bold; border: 1px solid {fondo}; padding: 4px; "
+                f"border-radius: 3px; }}"
+                f"QPushButton:hover {{ background-color: {colores(clave + '_hover').name()}; }}"
+            )
+
     def repintar_por_tema(self) -> None:
         """Redibuja la escalera con los colores del tema activo."""
-        estilo_tabla(self.tabla)
+        self._pintar_botones()
+        estilo_tabla(self.tabla, colores("fondo_ladder"))
         self._pendiente = True
         self._repintar()
 

@@ -138,23 +138,24 @@ def poner_fuente(widget, tamano_px: int) -> None:
 
 
 def estilo_tabla(tabla, fondo_propio=None) -> None:
-    """Lineas divisorias BIEN visibles (y opcionalmente un fondo propio).
+    """Fondo propio y lineas divisorias visibles, SIN hojas de estilo.
 
-    Se usa hoja de estilo porque el grosor/color de la grilla no sale de la paleta,
-    pero se escriben los colores EXPLICITOS (fondo, texto, borde) para no perder el
-    tema -si no, Qt deja la tabla en blanco; ver gui/tema.py-.
+    Por que sin hojas de estilo (se probo y salio mal): al estilar QTableView::item,
+    Qt IGNORA el color que cada celda se puso a si misma -> se perdia el sombreado de
+    las columnas del ladder. Y ademas las barras de desplazamiento pasaban a dibujarse
+    con el estilo por defecto (blancas) y el texto se veia como en negrita.
+
+    Con la PALETA del widget se consigue lo mismo sin romper nada:
+      - Base  -> el fondo de la tabla
+      - Mid   -> el color de las lineas de la grilla (asi las dibuja Qt)
     """
     from .tema import colores          # import tardio (evita ciclo)
 
-    borde = colores("borde").name()
-    fondo = (fondo_propio or colores("fondo_ladder")).name()
-    texto = tabla.palette().color(QPalette.Text).name()
-    tabla.setStyleSheet(
-        f"QTableView {{ background-color: {fondo}; color: {texto}; "
-        f"gridline-color: {borde}; }}"
-        # el borde por celda engrosa la separacion (la grilla sola es de 1 pixel)
-        f"QTableView::item {{ border-right: 1px solid {borde}; "
-        f"border-bottom: 1px solid {borde}; }}"
-        f"QHeaderView::section {{ background-color: {fondo}; color: {texto}; "
-        f"border: 1px solid {borde}; }}"
-    )
+    pal = QPalette(tabla.palette())
+    if fondo_propio is not None:
+        pal.setColor(QPalette.Base, fondo_propio)
+        pal.setColor(QPalette.AlternateBase, fondo_propio)
+    pal.setColor(QPalette.Mid, colores("borde"))     # lineas de la grilla
+    tabla.setPalette(pal)
+    tabla.setShowGrid(True)
+    tabla.setGridStyle(Qt.SolidLine)
