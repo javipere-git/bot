@@ -181,7 +181,22 @@ def main() -> bool:
               f"{t.styleSheet()[:30]!r} (esperada vacia)")
     print(f"   -> {'OK' if ok7 else '*** FALLO'}" + chr(10))
 
-    todo = ok1 and ok2 and ok3 and ok4 and ok5 and ok6 and ok7
+    print("8) Las lineas divisorias se distinguen del fondo de la tabla")
+    # El color de la grilla sale de QPalette.Mid del widget (de ahi lo toma Qt).
+    # Si el contraste baja, las divisiones de filas y columnas se pierden.
+    ok8 = True
+    for nombre, t in (("ladder", w.ladder.tabla), ("Time & Sales", w.tape.tabla),
+                      ("ordenes", w.monitor.tbl_ord)):
+        linea = t.palette().color(QPalette.Mid)
+        fondo_t = t.palette().color(QPalette.Base)
+        contraste = abs(_luminancia(linea) - _luminancia(fondo_t))
+        bien = contraste >= 0.20
+        ok8 = ok8 and bien
+        print(f"   {'OK ' if bien else '***'} {nombre:12} linea {linea.name()} sobre "
+              f"{fondo_t.name()} -> contraste {contraste:.2f} (minimo 0.20)")
+    print(f"   -> {'OK' if ok8 else '*** FALLO: no se distinguen'}" + chr(10))
+
+    todo = ok1 and ok2 and ok3 and ok4 and ok5 and ok6 and ok7 and ok8
     print("OK: el modo oscuro se lee bien en todos los paneles."
           if todo else "*** HAY FALLOS EN EL MODO OSCURO.")
     return todo

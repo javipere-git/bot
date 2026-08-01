@@ -89,7 +89,7 @@ _CLAROS = {
     "amarillo": QColor("#ffe08a"),   # precio promedio
     "texto": QColor("#111111"),      # sobre esos pasteles, letra oscura
     "texto_best": QColor("#111111"),
-    "borde": QColor("#b4b4b4"),
+    "borde": QColor("#9b9b9b"),      # lineas divisorias (modo claro)
     "tape_verde": QColor("#1e7d34"),
     "tape_rojo": QColor("#b00020"),
     "tape_gris": QColor("#666666"),
@@ -110,7 +110,7 @@ _OSCUROS = {
     "amarillo": QColor("#8a6b1e"),
     "texto": QColor("#f2f2f2"),      # sobre esos tonos, letra clara
     "texto_best": QColor("#0e1a12"),  # sobre el verde/rojo chillon, letra oscura
-    "borde": QColor("#5a6066"),      # lineas divisorias de las tablas
+    "borde": QColor("#848b93"),      # lineas divisorias: gris claro, bien visible
     "tape_verde": QColor("#4cd07a"),
     "tape_rojo": QColor("#ff6b7a"),
     "tape_gris": QColor("#a0a0a0"),
