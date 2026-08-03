@@ -56,7 +56,9 @@ class RealClock:
         return time.monotonic()
 
     def sleep(self, seconds: float) -> None:
-        time.sleep(seconds)
+        # nunca negativo: entre chequear el deadline y calcular cuanto dormir puede
+        # pasar un instante y el valor quedar levemente negativo -> time.sleep crashea
+        time.sleep(max(0.0, seconds))
 
 
 # Palabras que indican que el rechazo es de ESE simbolo (no un problema del broker).
@@ -600,7 +602,8 @@ class BotEngine:
                 return "guard_force"
             if self._stopped or self._abort or self._clock.now() >= deadline:
                 return "timeout"
-            self._clock.sleep(min(self._cfg.poll_interval_s, deadline - self._clock.now()))
+            self._clock.sleep(max(0.0, min(self._cfg.poll_interval_s,
+                                           deadline - self._clock.now())))
 
     def _force_exit(self, order_id: str | None, sym: str, pos: Position) -> None:
         """Cruza el spread para salir YA. Si todavia no hay orden de salida viva
@@ -717,7 +720,7 @@ class BotEngine:
             while self._clock.now() < fin:
                 if self._stopped or self._abort:
                     return False
-                self._clock.sleep(min(0.2, fin - self._clock.now()))
+                self._clock.sleep(max(0.0, min(0.2, fin - self._clock.now())))
 
         partes = []
         for lado, tope, ventana, contar in (
@@ -789,7 +792,8 @@ class BotEngine:
                     return False
             if self._stopped or self._abort or self._clock.now() >= deadline:
                 return False
-            self._clock.sleep(min(self._cfg.poll_interval_s, deadline - self._clock.now()))
+            self._clock.sleep(max(0.0, min(self._cfg.poll_interval_s,
+                                           deadline - self._clock.now())))
 
     def _entered_after_wait(self, order_id: str, timeout_s: float) -> bool:
         if self._wait_fill(order_id, timeout_s):
