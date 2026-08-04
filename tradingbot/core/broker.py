@@ -60,6 +60,15 @@ class Broker(ABC):
         numero puede ser menor que el efectivo de la cuenta."""
         return None
 
+    def distingue_venta_en_corto(self) -> bool:
+        """True si el broker distingue 'sell' de 'sell_short'.
+
+        Tradier SI: una 'sell' de mas que la posicion la RECHAZA, lo que funciona como
+        red de seguridad. Alpaca NO: solo tiene buy/sell, asi que una venta estando sin
+        posicion abre un CORTO en silencio. Cuando esto es False, la app pone la red de
+        seguridad por su cuenta (ver LadderPanel._mandar)."""
+        return True
+
     def puede_operar_en_corto(self) -> bool | None:
         """Si la cuenta admite ventas en corto. None = el broker no lo informa.
 

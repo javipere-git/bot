@@ -305,6 +305,11 @@ class AlpacaBroker(Broker):
         except (TypeError, ValueError):
             return None
 
+    def distingue_venta_en_corto(self) -> bool:
+        """NO: Alpaca solo tiene buy/sell. Vender estando sin posicion abre un corto
+        sin avisar (le paso al usuario: quedo corto sin querer)."""
+        return False
+
     def puede_operar_en_corto(self) -> bool | None:
         acc = self._get("/v2/account") or {}
         valor = acc.get("shorting_enabled")

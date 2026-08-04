@@ -47,6 +47,9 @@ class BrokerHibrido(Broker):
         # el resultado es de la CUENTA donde se opera
         return self._op.get_day_pnl()
 
+    def distingue_venta_en_corto(self) -> bool:
+        return self._op.distingue_venta_en_corto()
+
     def puede_operar_en_corto(self) -> bool | None:
         return self._op.puede_operar_en_corto()
 

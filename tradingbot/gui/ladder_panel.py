@@ -143,6 +143,7 @@ class LadderPanel(QWidget):
         self._step_idx = 0      # indice en STEPS
         self._orders = []       # ordenes abiertas del simbolo activo
         self._avg = None        # precio promedio de la posicion del simbolo activo
+        self._pos_qty = 0       # cantidad de la posicion (+largo / -corto)
         self._last_nbbo = None  # (bid_lvl, ask_lvl, paso) del ultimo centrado
         self._pendiente = False # hay datos nuevos por repintar (repintado throttleado)
         self._ancla = None      # (top_lvl, bot_lvl, paso) fijado mientras esta congelada
@@ -190,13 +191,28 @@ class LadderPanel(QWidget):
             "ejecuta recien en la proxima apertura."
         )
 
+        self.chk_short = QCheckBox("SS")
+        self.chk_short.setMinimumWidth(0)
+        self.chk_short.setToolTip(
+            "SS = SHORT SELL (vender en corto, sin tener las acciones).\n\n"
+            "DESTILDADO (lo normal): las ventas salen como 'sell', que solo sirven "
+            "para cerrar una posicion que YA tenes. Si te pasas de cantidad, el broker "
+            "rechaza la orden: es una red de seguridad.\n"
+            "TILDADO: las ventas salen como 'short sell' y ABREN un corto.\n\n"
+            "Solo afecta a las VENTAS; las compras no cambian.\n\n"
+            "OJO en ALPACA: Alpaca no distingue los dos tipos. Si vendes estando sin "
+            "posicion, quedas en CORTO igual, tildado o no. Por eso, con el tilde "
+            "APAGADO la app te frena la venta si no tenes posicion."
+        )
+        self.chk_short.toggled.connect(self._avisar_short)
+
         # --- cantidad (size) ---
         fila_size = QHBoxLayout()
         fila_size.addWidget(QLabel("Cant:"))
         self.spin_size = QSpinBox()
         self.spin_size.setRange(1, 1_000_000)
         self.spin_size.setValue(10)
-        self.spin_size.setMaximumWidth(80)
+        self.spin_size.setMaximumWidth(66)
         fila_size.addWidget(self.spin_size)
         self._botones_size = []
         for _ in range(4):
@@ -243,6 +259,7 @@ class LadderPanel(QWidget):
         self.btn_cancel_all.setToolTip("Cancela TODAS las ordenes abiertas de la cuenta")
         self.btn_cancel_all.clicked.connect(self._cancelar_todas)
         fila_zoom.addWidget(self.btn_cancel_all)
+        fila_zoom.addWidget(self.chk_short)
         fila_zoom.addStretch()
         lay.addLayout(fila_zoom)
 
@@ -295,6 +312,7 @@ class LadderPanel(QWidget):
         self.ed_symbol.setText(sym)
         self._orders = []
         self._avg = None
+        self._pos_qty = 0
         self._last = None
         self._last_nbbo = None
         self._ancla = None
@@ -362,7 +380,9 @@ class LadderPanel(QWidget):
         self._pendiente = True
 
     def set_positions(self, positions) -> None:
-        self._avg = next((p.avg_price for p in positions if p.symbol == self._symbol), None)
+        pos = next((p for p in positions if p.symbol == self._symbol), None)
+        self._avg = pos.avg_price if pos is not None else None
+        self._pos_qty = pos.quantity if pos is not None else 0   # +largo / -corto
         self._pendiente = True
 
     # ---------- congelado con el mouse encima ----------
@@ -521,7 +541,7 @@ class LadderPanel(QWidget):
         if col in (C_BID, C_ASK):
             precio = self._precio_de_fila(row)
             if precio is not None:
-                self._mandar(Side.BUY if col == C_BID else Side.SELL, precio)
+                self._mandar(Side.BUY if col == C_BID else self._lado_venta(), precio)
 
     def _usar_cantidad(self, boton) -> None:
         try:
@@ -588,7 +608,47 @@ class LadderPanel(QWidget):
 
     def _vender_al_bid(self) -> None:
         if self._last:
-            self._mandar(Side.SELL, self._last[0])
+            self._mandar(self._lado_venta(), self._last[0])
+
+    def _lado_venta(self):
+        """SELL_SHORT si esta tildado SS; si no, SELL (que solo cierra un largo)."""
+        return Side.SELL_SHORT if self.chk_short.isChecked() else Side.SELL
+
+    def _venta_permitida(self, broker, side, qty: int) -> bool:
+        """Red de seguridad para los brokers que NO distinguen venta de venta en corto.
+
+        En Tradier, una 'sell' de mas que la posicion la rechaza el broker. En Alpaca
+        no: solo tiene buy/sell, asi que vender estando sin posicion abre un CORTO en
+        silencio (le paso al usuario). Con el tilde SS APAGADO, la app pone esa red por
+        su cuenta y frena la venta que abriria o agrandaria un corto.
+
+        No cuesta ninguna llamada: usa las posiciones que el monitoreo ya trae.
+        """
+        if side != Side.SELL:
+            return True                       # compras y shorts a proposito: pasan
+        try:
+            if broker.distingue_venta_en_corto():
+                return True                   # el broker ya la rechaza el solo
+        except Exception:  # noqa: BLE001
+            return True                       # ante la duda, no estorbar
+        disponible = max(0, int(self._pos_qty))   # solo lo LARGO se puede vender
+        if qty <= disponible:
+            return True
+        self._log(
+            f"*** Ladder: NO mando la venta de {qty} {self._symbol}: solo tenes "
+            f"{disponible} en cartera y este broker NO distingue venta de venta en "
+            f"corto -> quedarias CORTO sin querer. Si es a proposito, tilda SS. ***"
+        )
+        return False
+
+    def _avisar_short(self, activo: bool) -> None:
+        """El tilde SS se pinta en rojo cuando esta activo: nunca debe quedar prendido
+        sin que se note (una venta de mas abriria un corto sin querer)."""
+        self.chk_short.setStyleSheet(
+            "QCheckBox { color: #e03e4e; font-weight: bold; }" if activo else ""
+        )
+        self._log("Ladder: SHORT SELL activado (las ventas abren corto)." if activo
+                  else "Ladder: short sell desactivado (las ventas solo cierran largos).")
 
     def _broker(self):
         return self._broker_provider() if self._broker_provider else None
@@ -602,6 +662,8 @@ class LadderPanel(QWidget):
             self._log("Ladder: no hay conexion para operar.")
             return
         qty = self.spin_size.value()
+        if not self._venta_permitida(broker, side, qty):
+            return
         try:
             orden = broker.place_order(
                 OrderRequest(self._symbol, side, qty, round(precio, 2), OrderType.LIMIT,

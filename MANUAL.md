@@ -313,6 +313,17 @@ la posicion este cerrada. (Si ya estabas mirando ese mismo simbolo, no se toca n
   30/07/2026).
 - **Botones de cantidad configurables**: la **rueda** al lado del ultimo boton abre un
   cuadro para cambiar las cantidades de los cuatro. Se recuerdan.
+- **Tilde SS (short sell)**, al lado de "Cancelar todo":
+  - **Destildado** (lo normal): las ventas salen como `sell`, que solo cierran una
+    posicion que YA tenes. Si te pasas de cantidad, **Tradier rechaza la orden**: es
+    una red de seguridad.
+  - **Tildado**: las ventas salen como `sell_short` y **ABREN un corto**. Se pinta de
+    ROJO y avisa en el registro, para que nunca quede prendido sin que lo notes.
+  - Solo afecta a las VENTAS; las compras no cambian.
+  - **OJO en ALPACA**: Alpaca solo acepta buy/sell, asi que vender estando sin
+    posicion abre un corto **en silencio** (le paso al usuario el 04/08/2026). Por eso
+    la app pone la red por su cuenta: con SS apagado, **frena** la venta que dejaria
+    corto. En Tradier no hace falta y no estorba.
 - **Marca amarilla** = tu precio promedio de la posicion.
 - **"Comprar al ask" / "Vender al bid"**: ordenes marketables al instante.
 - **Tilde "Ext. hours"** (al lado del zoom): mismo criterio que el del bot, pero para
