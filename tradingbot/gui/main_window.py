@@ -42,6 +42,7 @@ from .sonidos import sonar_alerta, sonar_ejecucion
 
 import configparser
 import os
+import threading
 
 
 def _live_max_shares() -> int:
@@ -75,21 +76,12 @@ def _zona(titulo: str, descripcion: str) -> QFrame:
     return marco
 
 
-class _TraerETB(QObject):
-    """Pide la lista ETB en otro hilo (en Alpaca son ~14.000 activos)."""
+class _AvisoETB(QObject):
+    """Solo transporta el resultado del pedido de la lista ETB desde el hilo que la
+    trae hasta la pantalla. No hace el trabajo: lo hace un hilo simple de Python."""
 
     listo = Signal(object)
     error = Signal(str)
-
-    def __init__(self, broker) -> None:
-        super().__init__()
-        self._broker = broker
-
-    def run(self) -> None:
-        try:
-            self.listo.emit(self._broker.lista_etb())
-        except Exception as e:  # noqa: BLE001
-            self.error.emit(str(e))
 
 
 class MainWindow(QMainWindow):
@@ -362,7 +354,7 @@ class MainWindow(QMainWindow):
         self._set_running(False)
         self._bot_escaneando(False)
 
-    def _lista_etb(self, accion: str) -> None:
+    def _lista_etb(self, accion: str, ruta: str | None = None) -> None:
         """Trae las acciones EASY TO BORROW y las carga en la watchlist o las guarda
         en un archivo.
 
@@ -373,6 +365,18 @@ class MainWindow(QMainWindow):
         tarda unos segundos; si se pidiera en el hilo de la pantalla, la app quedaria
         congelada mientras tanto.
         """
+        if accion == "bajar" and not ruta:
+            # El cuadro de "guardar como" va ACA, ANTES de arrancar el hilo. Abrirlo
+            # despues, desde el manejador de la señal del hilo, colgaba la app en
+            # Windows (dialogo modal mientras el hilo esta terminando).
+            ruta, _ = QFileDialog.getSaveFileName(
+                self, "Guardar la lista ETB",
+                f"etb_{self._perfil.broker_nombre.lower()}.txt",
+                "Texto (*.txt);;CSV (*.csv)",
+            )
+            if not ruta:
+                self.control.append_log("Lista ETB: descarga cancelada.")
+                return
         try:
             # conexion propia: compartir la del ladder entre hilos puede trabarse
             broker = self._perfil.crear_broker()
@@ -385,39 +389,35 @@ class MainWindow(QMainWindow):
             f"Pidiendo la lista ETB a {self._perfil.broker_nombre} (donde operas)..."
         )
 
-        hilo = QThread(self)
-        traedor = _TraerETB(broker)
-        traedor.moveToThread(hilo)
-        hilo.started.connect(traedor.run)
-        traedor.listo.connect(lambda syms, a=accion: self._etb_recibida(syms, a))
-        traedor.error.connect(
+        # Hilo SIMPLE de Python + señal Qt, el mismo patron que ya usa el streaming.
+        # Se probo con QThread + moveToThread y trajo dos problemas seguidos (el
+        # trabajador descartado por Python, y la app colgada); esto no tiene ciclo de
+        # vida que administrar: el hilo termina solo y la señal llega al hilo de la
+        # pantalla como corresponde.
+        aviso = _AvisoETB()                 # vive en el hilo de la pantalla
+        aviso.listo.connect(lambda syms, a=accion, r=ruta: self._etb_recibida(syms, a, r))
+        aviso.error.connect(
             lambda m: self.control.append_log(f"Lista ETB: no se pudo traer ({m})")
         )
-        for senal in (traedor.listo, traedor.error):
-            senal.connect(lambda *_: hilo.quit())
-        hilo.finished.connect(self._soltar_botones_etb)
-        hilo.finished.connect(traedor.deleteLater)
-        # Guardar la referencia de LOS DOS. Si solo se guarda el hilo, Python descarta
-        # el trabajador y su run() nunca corre: los botones quedan deshabilitados para
-        # siempre y no pasa nada (paso de verdad). El monitoreo lo hace igual.
-        self._hilo_etb = hilo
-        self._traedor_etb = traedor
-        hilo.start()
+        for senal in (aviso.listo, aviso.error):
+            senal.connect(lambda *_: self._soltar_botones_etb())
+        self._aviso_etb = aviso             # referencia (si no, Python lo descarta)
 
-        def _rendirse():
-            if hilo.isRunning():
-                self.control.append_log(
-                    "Lista ETB: el broker no respondio en 60s. Proba de nuevo."
-                )
-                hilo.quit()
-            self._soltar_botones_etb()
-        QTimer.singleShot(60_000, _rendirse)
+        def _trabajo():
+            try:
+                aviso.listo.emit(broker.lista_etb())
+            except Exception as e:  # noqa: BLE001
+                aviso.error.emit(str(e))
+
+        threading.Thread(target=_trabajo, daemon=True).start()
 
     def _soltar_botones_etb(self) -> None:
         for b in (self.control.btn_etb_cargar, self.control.btn_etb_bajar):
             b.setEnabled(True)
 
-    def _etb_recibida(self, symbols, accion: str) -> None:
+    def _etb_recibida(self, symbols, accion: str, ruta: str | None = None) -> None:
+        """Ya llego la lista. NO se abre ningun dialogo aca: la carpeta se eligio
+        antes de arrancar el hilo (abrir uno desde este punto colgaba la app)."""
         if not symbols:
             self.control.append_log(
                 f"Lista ETB: {self._perfil.broker_nombre} no devolvio simbolos."
@@ -430,12 +430,8 @@ class MainWindow(QMainWindow):
                 f"Watchlist cargada con {len(symbols):,} acciones ETB de {origen}."
             )
             return
-        ruta, _ = QFileDialog.getSaveFileName(
-            self, "Guardar la lista ETB", f"etb_{origen.lower()}.txt",
-            "Texto (*.txt);;CSV (*.csv)"
-        )
         if not ruta:
-            self.control.append_log("Lista ETB: descarga cancelada.")
+            self.control.append_log("Lista ETB: no se eligio donde guardar.")
             return
         try:
             with open(ruta, "w", encoding="utf-8") as f:

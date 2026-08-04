@@ -123,7 +123,34 @@ def main() -> None:
     print(f"   watchlist cargada: {cargo}")
     print(f"   -> {'OK' if ok6 else '*** FALLO: quedo colgado (es el bug)'}" + chr(10))
 
-    todo = ok1 and ok2 and ok3 and ok4 and ok5 and ok6
+    print("7) La DESCARGA completa el archivo (el caso que fallaba)")
+    # Esto no estaba cubierto: el caso 6 probaba "cargar", que no abre ningun cuadro.
+    # La descarga fallaba justamente por abrir el dialogo desde la señal del hilo.
+    destino = os.path.join(tempfile.gettempdir(), "etb_descarga.txt")
+    if os.path.exists(destino):
+        os.remove(destino)
+    w2 = MainWindow(perfil)
+    app.processEvents()
+    # la ruta ya elegida (en la app la pide ANTES de arrancar el hilo)
+    w2._lista_etb("bajar", ruta=destino)
+    t0 = time.time()
+    while time.time() - t0 < 8:
+        app.processEvents()
+        if os.path.exists(destino) and w2.control.btn_etb_bajar.isEnabled():
+            break
+        time.sleep(0.05)
+    existe = os.path.exists(destino)
+    contenido = ([x.strip() for x in open(destino, encoding="utf-8") if x.strip()]
+                 if existe else [])
+    solto = w2.control.btn_etb_bajar.isEnabled()
+    ok7 = existe and contenido == ["AAPL", "MSFT", "SPY"] and solto
+    print(f"   archivo escrito: {existe} -> {contenido}")
+    print(f"   botones sueltos: {solto} (tardo {time.time()-t0:.1f}s)")
+    print(f"   -> {'OK' if ok7 else '*** FALLO'}" + chr(10))
+    if existe:
+        os.remove(destino)
+
+    todo = ok1 and ok2 and ok3 and ok4 and ok5 and ok6 and ok7
     print("OK: la lista ETB sale del broker donde se opera, se carga y se descarga."
           if todo else "*** HAY FALLOS.")
     return todo

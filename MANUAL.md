@@ -176,8 +176,10 @@ permite UNA sola conexion de streaming de datos a la vez (con Algo Trader Plus, 
   - Medido el 04/08/2026: **Tradier 1.693** simbolos (endpoint `/v1/markets/etb`),
     **Alpaca 5.158** (campo `easy_to_borrow` de `/v2/assets`).
   - "Cargar" reemplaza la watchlist. **"Descargar" abre el cuadro de "guardar como"
-    RECIEN CUANDO LA LISTA LLEGO**, y ahi elegis vos la carpeta y el nombre (por
-    defecto `etb_tradier.txt` / `etb_alpaca.txt`): un simbolo por linea.
+    PRIMERO** (elegis carpeta y nombre; por defecto `etb_tradier.txt` /
+    `etb_alpaca.txt`) y despues trae la lista y la escribe: un simbolo por linea.
+    El orden importa: abrir ese cuadro DESPUES, desde el aviso del hilo, colgaba la
+    app en Windows (paso el 04/08/2026).
   - Se pide en otro hilo (en Alpaca son ~14.000 activos y tarda unos segundos), asi la
     app sigue funcionando al 100% mientras tanto. Los dos botones quedan
     deshabilitados hasta que termina, y si a los **60 segundos** no respondio, avisa en
