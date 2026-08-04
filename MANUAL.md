@@ -168,6 +168,19 @@ permite UNA sola conexion de streaming de datos a la vez (con Algo Trader Plus, 
 ### Watchlist
 - Se carga escribiendo simbolos (separados por espacio, coma, `;` o salto de linea)
   o con el boton **"Cargar archivo..."** (.txt/.csv).
+- **"Cargar lista ETB" / "Descargar lista ETB"** (04/08/2026). ETB = *Easy To Borrow*:
+  las acciones que se pueden **vender en corto**.
+  - La lista se le pide **al broker donde OPERAS**, no al que da los precios. Con el
+    perfil "Alpaca con datos de Tradier" trae la de **Alpaca**, que es quien acepta o
+    rechaza el short. (`Broker.lista_etb()`; el hibrido la delega en `operativa`.)
+  - Medido el 04/08/2026: **Tradier 1.693** simbolos (endpoint `/v1/markets/etb`),
+    **Alpaca 5.158** (campo `easy_to_borrow` de `/v2/assets`).
+  - "Cargar" reemplaza la watchlist; "Descargar" guarda un archivo con un simbolo por
+    linea. Se pide en otro hilo (en Alpaca son ~14.000 activos y tarda unos segundos).
+  - **En Alpaca las ETB no pagan costo de prestamo**, y las que NO estan en la lista
+    **no se pueden shortear**: la orden se rechaza. Ademas, si una accion pasa de ETB a
+    HTB durante la noche, Alpaca **cancela sola** las ordenes short abiertas antes de
+    la apertura.
 
 ### Entrada
 - **Cantidad**: acciones por orden.

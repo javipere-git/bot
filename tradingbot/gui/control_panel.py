@@ -113,6 +113,23 @@ class ControlPanel(QWidget):
         self.btn_cargar = QPushButton("Cargar archivo...")
         self.btn_cargar.clicked.connect(self._cargar_archivo)
         lay.addWidget(self.btn_cargar)
+
+        # Easy To Borrow: las acciones que el broker DONDE OPERAS deja vender en corto
+        etb = QHBoxLayout()
+        self.btn_etb_cargar = QPushButton("Cargar lista ETB")
+        self.btn_etb_bajar = QPushButton("Descargar lista ETB")
+        AYUDA_ETB = (
+            "ETB = Easy To Borrow: las acciones que se pueden vender en CORTO.\n\n"
+            "La lista se pide al broker donde OPERAS, no al que da los precios. Con el "
+            "perfil 'Alpaca con datos de Tradier' trae la lista de ALPACA, que es quien "
+            "acepta o rechaza el short.\n\n"
+            "En Alpaca, ademas, las ETB no pagan costo de prestamo, y las que NO estan "
+            "en la lista directamente no se pueden shortear."
+        )
+        for b in (self.btn_etb_cargar, self.btn_etb_bajar):
+            b.setToolTip(AYUDA_ETB)
+            etb.addWidget(b)
+        lay.addLayout(etb)
         return g
 
     def _grupo_entrada(self) -> QGroupBox:

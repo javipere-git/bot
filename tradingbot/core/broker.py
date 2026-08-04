@@ -60,6 +60,17 @@ class Broker(ABC):
         numero puede ser menor que el efectivo de la cuenta."""
         return None
 
+    def lista_etb(self) -> list[str]:
+        """Simbolos EASY TO BORROW: los que este broker deja vender en corto.
+
+        OJO, es del broker donde se OPERA, no del que da los precios: con el perfil
+        hibrido (opera en Alpaca, precios de Tradier) tiene que devolver la lista de
+        ALPACA, que es quien va a aceptar o rechazar el short.
+
+        Lista vacia = el broker no lo informa.
+        """
+        return []
+
     def distingue_venta_en_corto(self) -> bool:
         """True si el broker distingue 'sell' de 'sell_short'.
 

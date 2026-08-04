@@ -47,6 +47,12 @@ class BrokerHibrido(Broker):
         # el resultado es de la CUENTA donde se opera
         return self._op.get_day_pnl()
 
+    def lista_etb(self) -> list[str]:
+        """Del broker donde se OPERA: es el que acepta o rechaza el short. En este
+        perfil los precios vienen de otro lado, pero la lista tiene que ser del que
+        ejecuta."""
+        return self._op.lista_etb()
+
     def distingue_venta_en_corto(self) -> bool:
         return self._op.distingue_venta_en_corto()
 

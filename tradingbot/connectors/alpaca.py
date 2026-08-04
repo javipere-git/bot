@@ -305,6 +305,19 @@ class AlpacaBroker(Broker):
         except (TypeError, ValueError):
             return None
 
+    def lista_etb(self) -> list[str]:
+        """Easy To Borrow de Alpaca: sale del campo easy_to_borrow de cada activo.
+        Una sola llamada trae los ~14.000 activos; se filtran los que ademas son
+        shortable (Alpaca SOLO deja shortear ETB, y sin costo de prestamo)."""
+        data = self._get("/v2/assets",
+                         params={"status": "active", "asset_class": "us_equity"})
+        if not isinstance(data, list):
+            return []
+        return sorted({
+            str(a.get("symbol", "")).upper() for a in data
+            if a.get("easy_to_borrow") and a.get("shortable") and a.get("symbol")
+        })
+
     def distingue_venta_en_corto(self) -> bool:
         """NO: Alpaca solo tiene buy/sell. Vender estando sin posicion abre un corto
         sin avisar (le paso al usuario: quedo corto sin querer)."""

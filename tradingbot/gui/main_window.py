@@ -8,8 +8,9 @@ Habla SIEMPRE con NUESTRO motor (core/engine.py) y NUESTRA interfaz comun
 """
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, QThread, QTimer
+from PySide6.QtCore import QObject, Qt, QThread, QTimer, Signal
 from PySide6.QtWidgets import (
+    QFileDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -72,6 +73,23 @@ def _zona(titulo: str, descripcion: str) -> QFrame:
     lay.addWidget(desc)
     lay.addStretch()
     return marco
+
+
+class _TraerETB(QObject):
+    """Pide la lista ETB en otro hilo (en Alpaca son ~14.000 activos)."""
+
+    listo = Signal(object)
+    error = Signal(str)
+
+    def __init__(self, broker) -> None:
+        super().__init__()
+        self._broker = broker
+
+    def run(self) -> None:
+        try:
+            self.listo.emit(self._broker.lista_etb())
+        except Exception as e:  # noqa: BLE001
+            self.error.emit(str(e))
 
 
 class MainWindow(QMainWindow):
@@ -163,6 +181,8 @@ class MainWindow(QMainWindow):
         self.control.btn_pausar.clicked.connect(self._pausar)
         self.control.btn_reanudar.clicked.connect(self._reanudar)
         self.control.btn_detener.clicked.connect(self._detener)
+        self.control.btn_etb_cargar.clicked.connect(lambda: self._lista_etb("cargar"))
+        self.control.btn_etb_bajar.clicked.connect(lambda: self._lista_etb("bajar"))
         self._set_running(False)
 
         # monitoreo en vivo (su propio broker de lectura, en otro hilo)
@@ -341,6 +361,73 @@ class MainWindow(QMainWindow):
         self._runner = None
         self._set_running(False)
         self._bot_escaneando(False)
+
+    def _lista_etb(self, accion: str) -> None:
+        """Trae las acciones EASY TO BORROW y las carga en la watchlist o las guarda
+        en un archivo.
+
+        La lista se le pide al broker donde se OPERA (con el perfil hibrido, el que
+        ejecuta, no el que da los precios): es el que acepta o rechaza el short.
+
+        Se pide en OTRO HILO porque en Alpaca la respuesta trae ~14.000 activos y
+        tarda unos segundos; si se pidiera en el hilo de la pantalla, la app quedaria
+        congelada mientras tanto.
+        """
+        broker = self._manual_broker
+        if broker is None:
+            self.control.append_log("Lista ETB: no hay conexion con el broker.")
+            return
+        for b in (self.control.btn_etb_cargar, self.control.btn_etb_bajar):
+            b.setEnabled(False)
+        self.control.append_log(
+            f"Pidiendo la lista ETB a {self._perfil.broker_nombre} (donde operas)..."
+        )
+
+        hilo = QThread(self)
+        traedor = _TraerETB(broker)
+        traedor.moveToThread(hilo)
+        hilo.started.connect(traedor.run)
+        traedor.listo.connect(lambda syms, a=accion: self._etb_recibida(syms, a))
+        traedor.error.connect(
+            lambda m: self.control.append_log(f"Lista ETB: no se pudo traer ({m})")
+        )
+        for senal in (traedor.listo, traedor.error):
+            senal.connect(lambda *_: hilo.quit())
+        hilo.finished.connect(lambda: [b.setEnabled(True) for b in
+                                       (self.control.btn_etb_cargar,
+                                        self.control.btn_etb_bajar)])
+        hilo.finished.connect(traedor.deleteLater)
+        self._hilo_etb = hilo          # guardar la referencia (si no, Qt lo descarta)
+        hilo.start()
+
+    def _etb_recibida(self, symbols, accion: str) -> None:
+        if not symbols:
+            self.control.append_log(
+                f"Lista ETB: {self._perfil.broker_nombre} no devolvio simbolos."
+            )
+            return
+        origen = self._perfil.broker_nombre
+        if accion == "cargar":
+            self.control.txt_watchlist.setPlainText(" ".join(symbols))
+            self.control.append_log(
+                f"Watchlist cargada con {len(symbols):,} acciones ETB de {origen}."
+            )
+            return
+        ruta, _ = QFileDialog.getSaveFileName(
+            self, "Guardar la lista ETB", f"etb_{origen.lower()}.txt",
+            "Texto (*.txt);;CSV (*.csv)"
+        )
+        if not ruta:
+            self.control.append_log("Lista ETB: descarga cancelada.")
+            return
+        try:
+            with open(ruta, "w", encoding="utf-8") as f:
+                f.write("\n".join(symbols) + "\n")
+            self.control.append_log(
+                f"Lista ETB de {origen} guardada: {len(symbols):,} acciones en {ruta}"
+            )
+        except Exception as e:  # noqa: BLE001
+            self.control.append_log(f"Lista ETB: no se pudo guardar ({e})")
 
     def _bot_escaneando(self, valor: bool) -> None:
         """Le avisa al monitoreo si el bot esta escaneando la watchlist. Mientras lo

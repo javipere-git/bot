@@ -208,6 +208,14 @@ class TradierBroker(Broker):
     def get_closed_orders(self) -> list[Order]:
         return [o for o in self.get_orders() if not o.is_active]
 
+    def lista_etb(self) -> list[str]:
+        """Easy To Borrow de Tradier: endpoint dedicado, una sola llamada."""
+        data = self._get("/markets/etb")
+        nodo = ((data or {}).get("securities") or {}).get("security") or []
+        if isinstance(nodo, dict):
+            nodo = [nodo]
+        return sorted({str(x.get("symbol", "")).upper() for x in nodo if x.get("symbol")})
+
     def get_buying_power(self) -> float | None:
         data = self._get(f"/accounts/{self._account_id}/balances")
         bal = data.get("balances") or {}
