@@ -175,8 +175,13 @@ permite UNA sola conexion de streaming de datos a la vez (con Algo Trader Plus, 
     rechaza el short. (`Broker.lista_etb()`; el hibrido la delega en `operativa`.)
   - Medido el 04/08/2026: **Tradier 1.693** simbolos (endpoint `/v1/markets/etb`),
     **Alpaca 5.158** (campo `easy_to_borrow` de `/v2/assets`).
-  - "Cargar" reemplaza la watchlist; "Descargar" guarda un archivo con un simbolo por
-    linea. Se pide en otro hilo (en Alpaca son ~14.000 activos y tarda unos segundos).
+  - "Cargar" reemplaza la watchlist. **"Descargar" abre el cuadro de "guardar como"
+    RECIEN CUANDO LA LISTA LLEGO**, y ahi elegis vos la carpeta y el nombre (por
+    defecto `etb_tradier.txt` / `etb_alpaca.txt`): un simbolo por linea.
+  - Se pide en otro hilo (en Alpaca son ~14.000 activos y tarda unos segundos), asi la
+    app sigue funcionando al 100% mientras tanto. Los dos botones quedan
+    deshabilitados hasta que termina, y si a los **60 segundos** no respondio, avisa en
+    el registro y los suelta igual.
   - **En Alpaca las ETB no pagan costo de prestamo**, y las que NO estan en la lista
     **no se pueden shortear**: la orden se rechaza. Ademas, si una accion pasa de ETB a
     HTB durante la noche, Alpaca **cancela sola** las ordenes short abiertas antes de

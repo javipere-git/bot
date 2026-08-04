@@ -373,9 +373,11 @@ class MainWindow(QMainWindow):
         tarda unos segundos; si se pidiera en el hilo de la pantalla, la app quedaria
         congelada mientras tanto.
         """
-        broker = self._manual_broker
-        if broker is None:
-            self.control.append_log("Lista ETB: no hay conexion con el broker.")
+        try:
+            # conexion propia: compartir la del ladder entre hilos puede trabarse
+            broker = self._perfil.crear_broker()
+        except Exception as e:  # noqa: BLE001
+            self.control.append_log(f"Lista ETB: no hay conexion con el broker ({e})")
             return
         for b in (self.control.btn_etb_cargar, self.control.btn_etb_bajar):
             b.setEnabled(False)
@@ -393,12 +395,27 @@ class MainWindow(QMainWindow):
         )
         for senal in (traedor.listo, traedor.error):
             senal.connect(lambda *_: hilo.quit())
-        hilo.finished.connect(lambda: [b.setEnabled(True) for b in
-                                       (self.control.btn_etb_cargar,
-                                        self.control.btn_etb_bajar)])
+        hilo.finished.connect(self._soltar_botones_etb)
         hilo.finished.connect(traedor.deleteLater)
-        self._hilo_etb = hilo          # guardar la referencia (si no, Qt lo descarta)
+        # Guardar la referencia de LOS DOS. Si solo se guarda el hilo, Python descarta
+        # el trabajador y su run() nunca corre: los botones quedan deshabilitados para
+        # siempre y no pasa nada (paso de verdad). El monitoreo lo hace igual.
+        self._hilo_etb = hilo
+        self._traedor_etb = traedor
         hilo.start()
+
+        def _rendirse():
+            if hilo.isRunning():
+                self.control.append_log(
+                    "Lista ETB: el broker no respondio en 60s. Proba de nuevo."
+                )
+                hilo.quit()
+            self._soltar_botones_etb()
+        QTimer.singleShot(60_000, _rendirse)
+
+    def _soltar_botones_etb(self) -> None:
+        for b in (self.control.btn_etb_cargar, self.control.btn_etb_bajar):
+            b.setEnabled(True)
 
     def _etb_recibida(self, symbols, accion: str) -> None:
         if not symbols:

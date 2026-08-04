@@ -85,7 +85,45 @@ def main() -> None:
     print(f"   FakeBroker.lista_etb() -> {FakeBroker().lista_etb()}")
     print(f"   -> {'OK' if ok5 else '*** FALLO'}\n")
 
-    todo = ok1 and ok2 and ok3 and ok4 and ok5
+    print("6) El pedido EN OTRO HILO termina de verdad (y suelta los botones)")
+    # Bug real (04/08/2026): se guardaba la referencia del hilo pero NO la del objeto
+    # que hace el trabajo. Python lo descartaba, su run() nunca corria, y los botones
+    # quedaban deshabilitados para siempre sin ningun mensaje (al usuario le paso:
+    # 5 minutos esperando una lista que tarda segundos).
+    import time
+    from tradingbot.gui.main_window import MainWindow
+    from tradingbot.gui.perfiles import Perfil
+
+    class BrokerLento(FakeBroker):
+        def lista_etb(self):
+            time.sleep(0.4)              # como una llamada de red
+            return ["AAPL", "MSFT", "SPY"]
+
+    perfil = Perfil(
+        id="prueba", broker_nombre="Prueba", cuenta_texto="test", es_live=False,
+        _crear_broker=lambda: BrokerLento(),
+    )
+    w = MainWindow(perfil)
+    app.processEvents()
+    w._lista_etb("cargar")
+    app.processEvents()
+    deshabilitados = not w.control.btn_etb_cargar.isEnabled()
+    t0 = time.time()
+    while time.time() - t0 < 8:          # el bug dejaba esto colgado para siempre
+        app.processEvents()
+        if w.control.btn_etb_cargar.isEnabled():
+            break
+        time.sleep(0.05)
+    tardo = time.time() - t0
+    volvieron = w.control.btn_etb_cargar.isEnabled()
+    cargo = w.control.get_symbols() == ["AAPL", "MSFT", "SPY"]
+    ok6 = deshabilitados and volvieron and cargo and tardo < 5
+    print(f"   botones deshabilitados mientras trae: {deshabilitados}")
+    print(f"   termino en {tardo:.1f}s y los solto: {volvieron}")
+    print(f"   watchlist cargada: {cargo}")
+    print(f"   -> {'OK' if ok6 else '*** FALLO: quedo colgado (es el bug)'}" + chr(10))
+
+    todo = ok1 and ok2 and ok3 and ok4 and ok5 and ok6
     print("OK: la lista ETB sale del broker donde se opera, se carga y se descarga."
           if todo else "*** HAY FALLOS.")
     return todo
