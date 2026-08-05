@@ -11,6 +11,7 @@ cableado al cerebro (tradingbot/core/engine.py) viene en el paso siguiente.
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -110,9 +111,21 @@ class ControlPanel(QWidget):
         )
         self.txt_watchlist.setMaximumHeight(80)
         lay.addWidget(self.txt_watchlist)
+        # Cargar archivo (mitad del ancho) + Limpiar y Pegar (un cuarto cada uno)
+        fila_botones = QHBoxLayout()
         self.btn_cargar = QPushButton("Cargar archivo...")
         self.btn_cargar.clicked.connect(self._cargar_archivo)
-        lay.addWidget(self.btn_cargar)
+        self.btn_limpiar = QPushButton("Limpiar")
+        self.btn_limpiar.setToolTip("Borra todos los simbolos de la watchlist.")
+        self.btn_limpiar.clicked.connect(self._limpiar_watchlist)
+        self.btn_pegar = QPushButton("Pegar")
+        self.btn_pegar.setToolTip("Pega los simbolos que tengas copiados en el portapapeles.")
+        self.btn_pegar.clicked.connect(self._pegar_watchlist)
+        # los factores de estiramiento reparten el ancho: 2 + 1 + 1 = 1/2, 1/4, 1/4
+        fila_botones.addWidget(self.btn_cargar, 2)
+        fila_botones.addWidget(self.btn_limpiar, 1)
+        fila_botones.addWidget(self.btn_pegar, 1)
+        lay.addLayout(fila_botones)
 
         # Easy To Borrow: las acciones que el broker DONDE OPERAS deja vender en corto
         etb = QHBoxLayout()
@@ -448,6 +461,21 @@ class ControlPanel(QWidget):
             return
         self.txt_watchlist.setPlainText(" ".join(simbolos))
         self.append_log(f"Cargados {len(simbolos)} simbolos del archivo.")
+
+    def _limpiar_watchlist(self) -> None:
+        if not self.txt_watchlist.toPlainText().strip():
+            return
+        self.txt_watchlist.clear()
+        self.append_log("Watchlist vaciada.")
+
+    def _pegar_watchlist(self) -> None:
+        texto = QGuiApplication.clipboard().text()
+        simbolos = parse_watchlist(texto)
+        if not simbolos:
+            self.append_log("El portapapeles no tenia simbolos reconocibles.")
+            return
+        self.txt_watchlist.setPlainText(" ".join(simbolos))
+        self.append_log(f"Pegados {len(simbolos)} simbolos del portapapeles.")
 
     def build_config(self) -> EngineConfig:
         """Arma la configuracion del motor leyendo todos los campos del panel."""
