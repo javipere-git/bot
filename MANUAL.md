@@ -546,6 +546,31 @@ streaming, el bot **ESPERA los segundos que falten** antes de decidir (la ventan
 larga de las dos, si usas las dos). Preferimos
 demorar unos segundos que decidir con datos incompletos. Pasa una sola vez, al inicio.
 
+### Filtro de spread contra el precio (06/08/2026)
+
+Campo **"Max spread % precio: [X] % del precio o mas -> saltea"**.
+
+Mide que tan ancho es el spread **comparado con lo que vale la accion**. Un spread de
+0.10 es angosto en una accion de 200 (0.05%) y carisimo en una de 1.00 (10%). Sirve
+para dejar afuera las **iliquidas**, donde el spread se come la ganancia.
+
+Ejemplo con **5**:
+- accion **9.75 x 10.25** -> spread 0.50 sobre un precio de 10.00 = **5.00%** ->
+  **SALTEA**.
+- accion **9.80 x 10.20** -> spread 0.40 = **4.00%** -> **entra**.
+
+**Es "igual o mayor"** (a diferencia de los otros filtros, que usan mayor estricto):
+justo en el 5.00% ya saltea.
+
+**El precio de referencia es el punto MEDIO entre bid y ask.**
+
+**Diferencia con "Max spread"**: aquel compara el spread de hace un rato contra el de
+ahora (necesita streaming y una ventana de segundos). Este compara el spread de ahora
+contra el precio de ahora: es instantaneo, **NO necesita streaming** y usa la misma
+cotizacion que ya se pidio para operar (0 llamadas extra a la API). Vacio = apagado.
+
+Verificado en `examples/demo_filtro_spread_precio.py` (incluye el caso del borde exacto).
+
 **OJO con el feed**: los filtros dependen de la calidad del streaming. Medido el
 29/07/2026 en el after-hours (cambios de bid/ask en 20s): Alpaca dio SPY 56 / AAPL 16,
 y Tradier 0 en todos (Tradier no parece streamear quotes fuera de la rueda; durante el

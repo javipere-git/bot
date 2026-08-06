@@ -73,6 +73,13 @@ class EngineConfig:
     order2: OrderConfig | None = None
     spread_min: float | None = None     # filtro de spread en $ (None = sin limite)
     spread_max: float | None = None
+    # Filtro de SPREAD CONTRA EL PRECIO: que tan ancho es el spread comparado con lo
+    # que vale la accion. Ej. 5 => si el spread es 5% o MAS del precio, saltea (spread
+    # 0.50 en una accion de 10.00 = 5%). Sirve para dejar afuera las iliquidas, donde
+    # el spread se come la ganancia. Se mide con la cotizacion del momento (no necesita
+    # streaming). El precio de referencia es el PUNTO MEDIO entre bid y ask.
+    # None = filtro apagado.
+    max_spread_pct_precio: float | None = None
     # Filtro de MOVIMIENTO: cuantas veces se movio el precio en los ultimos segundos.
     # Si se paso del tope, el bot saltea el simbolo (accion demasiado nerviosa).
     # El bid y el ask van por separado, cada uno con su ventana; None = ese lado no

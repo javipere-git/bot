@@ -361,6 +361,8 @@ class BotEngine:
         if not self._volume_ok(quote.volume):
             self._log(f"{sym}: volumen del dia {quote.volume:,} fuera de rango -> salteo")
             return None
+        if not self._spread_pct_precio_ok(sym, quote, spread):
+            return None
         if not self._movimiento_ok(sym, spread):
             return None
 
@@ -770,6 +772,36 @@ class BotEngine:
             return False
         if self._cfg.spread_max is not None and spread > self._cfg.spread_max:
             return False
+        return True
+
+    def _spread_pct_precio_ok(self, sym: str, quote, spread: float) -> bool:
+        """El spread comparado con lo que VALE la accion.
+
+        Deja afuera las iliquidas: un spread de 0.10 es angosto en una accion de 200
+        (0.05%) y carisimo en una de 1.00 (10%). El precio de referencia es el punto
+        MEDIO entre bid y ask.
+
+        Saltea si el spread es IGUAL O MAYOR al tope (asi lo pidio el usuario), a
+        diferencia de los otros filtros que usan mayor estricto.
+
+        No necesita streaming: usa la cotizacion que ya se pidio para operar.
+        """
+        tope = self._cfg.max_spread_pct_precio
+        if tope is None:
+            return True
+        medio = (quote.bid + quote.ask) / 2.0
+        if medio <= 0:                      # cotizacion sin sentido: no filtro por esto
+            return True
+        pct = (spread / medio) * 100.0
+        if pct >= tope:
+            self._log(
+                f"{sym}: el spread {spread:.2f} es {pct:.2f}% del precio "
+                f"({medio:.2f}) -> salteo, llega al {tope:g}%"
+            )
+            return False
+        self._log(
+            f"{sym}: spread {pct:.2f}% del precio (tope {tope:g}%) -> OK"
+        )
         return True
 
     def _volume_ok(self, volume: int) -> bool:

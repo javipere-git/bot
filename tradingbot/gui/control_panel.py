@@ -280,6 +280,28 @@ class ControlPanel(QWidget):
             "Necesita el streaming conectado. Vacio = filtro apagado."
         )
         form.addRow("Max volumen:", caja_vs)
+
+        spp = QHBoxLayout()
+        self.ed_spr_pct_precio = QLineEdit()
+        self.ed_spr_pct_precio.setPlaceholderText("%")
+        self.ed_spr_pct_precio.setMaximumWidth(50)
+        spp.addWidget(self.ed_spr_pct_precio)
+        spp.addWidget(QLabel("% del precio o mas -> saltea"))
+        spp.addStretch(1)
+        caja_spp = self._wrap(spp)
+        caja_spp.setToolTip(
+            "Que tan ancho es el spread comparado con lo que VALE la accion.\n\n"
+            "Un spread de 0.10 es angosto en una accion de 200 (0.05%) y carisimo en "
+            "una de 1.00 (10%). Sirve para dejar afuera las iliquidas, donde el spread "
+            "se come la ganancia.\n\n"
+            "Ejemplo con 5: una accion 9.75 x 10.25 tiene spread 0.50 sobre un precio "
+            "de 10.00 = 5% -> SALTEA (es 'igual o mayor'). Si el spread fuera 0.40 "
+            "(4%), entra.\n\n"
+            "El precio de referencia es el punto MEDIO entre bid y ask.\n\n"
+            "Este NO necesita streaming: usa la cotizacion del momento. Vacio = "
+            "filtro apagado."
+        )
+        form.addRow("Max spread % precio:", caja_spp)
         return g
 
     def _fila_movimiento(self, form, etiqueta: str, ayuda: str):
@@ -528,6 +550,7 @@ class ControlPanel(QWidget):
             ventana_volumen_s=float(self._parse_int(self.ed_vol_seg_seg.text()) or 30),
             volume_min=self._parse_int(self.ed_vol_min.text()),
             volume_max=self._parse_int(self.ed_vol_max.text()),
+            max_spread_pct_precio=self._parse_float(self.ed_spr_pct_precio.text()),
             exit_levels=exit_levels,
             wait_before_exit_s=self.spin_wait.value() if self.grp_cierre.isChecked() else 0.0,
             no_cerrar_bajo_promedio=self.chk_no_perder.isChecked(),
