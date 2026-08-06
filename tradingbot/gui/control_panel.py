@@ -286,7 +286,7 @@ class ControlPanel(QWidget):
         self.ed_spr_pct_precio.setPlaceholderText("%")
         self.ed_spr_pct_precio.setMaximumWidth(50)
         spp.addWidget(self.ed_spr_pct_precio)
-        spp.addWidget(QLabel("% del precio o mas -> saltea"))
+        spp.addWidget(QLabel("% del precio"))
         spp.addStretch(1)
         caja_spp = self._wrap(spp)
         caja_spp.setToolTip(
@@ -301,7 +301,7 @@ class ControlPanel(QWidget):
             "Este NO necesita streaming: usa la cotizacion del momento. Vacio = "
             "filtro apagado."
         )
-        form.addRow("Max spread % precio:", caja_spp)
+        form.addRow("Max spread:", caja_spp)
         return g
 
     def _fila_movimiento(self, form, etiqueta: str, ayuda: str):
