@@ -175,7 +175,7 @@ class MainWindow(QMainWindow):
         self.control.btn_detener.clicked.connect(self._detener)
         self.control.btn_etb_cargar.clicked.connect(lambda: self._lista_etb("cargar"))
         self.control.btn_etb_bajar.clicked.connect(lambda: self._lista_etb("bajar"))
-        self.control.btn_descargar_reporte.clicked.connect(self._descargar_reporte)
+        self.control.btn_descargar_reporte.clicked.connect(self._abrir_reporte)
         self._set_running(False)
 
         # --- reportes de las pasadas del dia (contadores del motor + neto por
@@ -185,7 +185,7 @@ class MainWindow(QMainWindow):
         self._ultimo_realizado: float | None = None   # ultimo "realizado" que informo el broker
         self._realizado_inicio: float | None = None   # foto al apretar Iniciar
         self._broker_pasada = None              # broker de la corrida (para leer el neto)
-        self._refrescar_combo_reportes()
+        self._cargar_reportes_de_hoy()          # si ya hubo pasadas hoy, las trae del disco
 
         # monitoreo en vivo (su propio broker de lectura, en otro hilo)
         self._arrancar_monitoreo()
@@ -410,7 +410,7 @@ class MainWindow(QMainWindow):
                     if rep.neto_disponible and rep.neto is not None else "n/d")
             self.control.append_log(
                 f"Reporte de la pasada listo ({rep.rango_horario()}, neto {neto}). "
-                f"Descargalo desde el desplegable al lado de 'Registro:'."
+                f"Abrilo desde el desplegable al lado de 'Registro:'."
             )
         except Exception as e:  # noqa: BLE001
             self.control.append_log(f"No pude armar el reporte de la pasada: {e}")
@@ -418,23 +418,77 @@ class MainWindow(QMainWindow):
             self._realizado_inicio = None
             self._broker_pasada = None
 
-    def _dir_reportes(self) -> str:
+    def _dir_reportes(self, cuando: float | None = None, crear: bool = False) -> str:
+        """Carpeta del dia: reportes/AAAA-MM-DD/. Un dia por carpeta.
+        `cuando` es el epoch del que sale la fecha (por defecto, hoy)."""
+        import time as _t
         raiz = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        d = os.path.join(raiz, "reportes")
-        os.makedirs(d, exist_ok=True)
+        dia = _t.strftime("%Y-%m-%d", _t.localtime(cuando if cuando is not None else _t.time()))
+        d = os.path.join(raiz, "reportes", dia)
+        if crear:
+            os.makedirs(d, exist_ok=True)
         return d
 
-    def _guardar_reporte_disco(self, rep) -> None:
-        """Guarda la pasada en reportes/ para que sobreviva si cerras la app."""
-        from ..core.reporte import render_pasada
+    def _dir_datos(self, cuando: float | None = None, crear: bool = False) -> str:
+        """Subcarpeta 'datos' del dia: guarda los .json que la app relee al reabrir
+        (asi la vista del usuario en reportes/AAAA-MM-DD/ queda limpia, solo .txt)."""
+        d = os.path.join(self._dir_reportes(cuando), "datos")
+        if crear:
+            os.makedirs(d, exist_ok=True)
+        return d
+
+    def _nombre_base_pasada(self, rep) -> str:
         import time as _t
+        return _t.strftime("pasada_%Y-%m-%d_%H-%M-%S", _t.localtime(rep.inicio))
+
+    def _ruta_txt_pasada(self, rep) -> str:
+        return os.path.join(self._dir_reportes(rep.inicio), self._nombre_base_pasada(rep) + ".txt")
+
+    def _guardar_reporte_disco(self, rep) -> None:
+        """Guarda la pasada en reportes/AAAA-MM-DD/: el .txt (legible, se abre desde la
+        app o desde la carpeta) y un .json en datos/ (para reconstruir el desplegable y
+        el resumen del dia si cerras y volves a abrir la app)."""
+        from ..core.reporte import render_pasada
+        import json
+        base = self._nombre_base_pasada(rep)
         try:
-            nombre = _t.strftime("pasada_%Y-%m-%d_%H-%M-%S.txt", _t.localtime(rep.inicio))
-            with open(os.path.join(self._dir_reportes(), nombre), "w",
-                      encoding="utf-8") as f:
+            self._dir_reportes(rep.inicio, crear=True)
+            with open(self._ruta_txt_pasada(rep), "w", encoding="utf-8") as f:
                 f.write(render_pasada(rep))
         except Exception:  # noqa: BLE001
             pass   # que no falle nunca: es solo el respaldo en disco
+        try:
+            self._dir_datos(rep.inicio, crear=True)
+            with open(os.path.join(self._dir_datos(rep.inicio), base + ".json"), "w",
+                      encoding="utf-8") as f:
+                json.dump(rep.to_dict(), f, ensure_ascii=False)
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _cargar_reportes_de_hoy(self) -> None:
+        """Al abrir la app, trae del disco las pasadas de HOY (si las hay) para que el
+        desplegable y el resumen del dia sigan disponibles tras cerrar y reabrir."""
+        from ..core.reporte import ReportePasada
+        import glob
+        import json
+        try:
+            carpeta = self._dir_datos()   # datos de hoy (no la crea si no existe)
+            cargados = []
+            for ruta in sorted(glob.glob(os.path.join(carpeta, "pasada_*.json"))):
+                try:
+                    with open(ruta, "r", encoding="utf-8") as f:
+                        cargados.append(ReportePasada.from_dict(json.load(f)))
+                except Exception:  # noqa: BLE001
+                    continue   # un archivo roto no tira abajo el resto
+            cargados.sort(key=lambda r: r.inicio)
+            self._reportes_dia = cargados
+            if cargados:
+                self.control.append_log(
+                    f"Reportes: recupere {len(cargados)} pasada(s) de hoy de la carpeta."
+                )
+        except Exception:  # noqa: BLE001
+            self._reportes_dia = []
+        self._refrescar_combo_reportes()
 
     def _refrescar_combo_reportes(self) -> None:
         """Llena el desplegable: resumen del dia + una entrada por pasada (por horario)."""
@@ -451,36 +505,50 @@ class MainWindow(QMainWindow):
             self.control.btn_descargar_reporte.setEnabled(False)
         combo.blockSignals(False)
 
-    def _descargar_reporte(self) -> None:
+    def _abrir_archivo(self, ruta: str) -> bool:
+        """Abre un archivo con el programa por defecto de Windows (Bloc de notas)."""
+        try:
+            os.startfile(ruta)  # noqa: S606  (Windows)
+            return True
+        except Exception as e:  # noqa: BLE001
+            self.control.append_log(f"No pude abrir el archivo ({e}). Esta en: {ruta}")
+            return False
+
+    def _abrir_reporte(self) -> None:
+        """Las pasadas ya estan guardadas: se abren. El resumen del dia se genera en el
+        momento, se guarda en la carpeta del dia y se abre."""
         from ..core.reporte import render_pasada, render_resumen_dia
         import time as _t
         if not self._reportes_dia:
-            self.control.append_log("Todavia no hay ninguna pasada para descargar.")
+            self.control.append_log("Todavia no hay ninguna pasada.")
             return
         dato = self.control.combo_reportes.currentData()
         if dato == "resumen":
-            texto = render_resumen_dia(self._reportes_dia)
-            sugerido = _t.strftime("resumen_dia_%Y-%m-%d.txt")
+            try:
+                self._dir_reportes(crear=True)
+                ruta = os.path.join(self._dir_reportes(),
+                                    _t.strftime("resumen_dia_%Y-%m-%d.txt"))
+                with open(ruta, "w", encoding="utf-8") as f:
+                    f.write(render_resumen_dia(self._reportes_dia))
+            except Exception as e:  # noqa: BLE001
+                self.control.append_log(f"No pude generar el resumen del dia: {e}")
+                return
+            if self._abrir_archivo(ruta):
+                self.control.append_log(f"Resumen del dia generado y abierto: {ruta}")
         elif isinstance(dato, int) and 0 <= dato < len(self._reportes_dia):
             rep = self._reportes_dia[dato]
-            texto = render_pasada(rep)
-            sugerido = _t.strftime("pasada_%Y-%m-%d_%H-%M-%S.txt",
-                                   _t.localtime(rep.inicio))
+            ruta = self._ruta_txt_pasada(rep)
+            if not os.path.exists(ruta):     # por si falto el .txt: lo re-genero
+                try:
+                    self._dir_reportes(rep.inicio, crear=True)
+                    with open(ruta, "w", encoding="utf-8") as f:
+                        f.write(render_pasada(rep))
+                except Exception as e:  # noqa: BLE001
+                    self.control.append_log(f"No pude abrir el reporte: {e}")
+                    return
+            self._abrir_archivo(ruta)
         else:
             self.control.append_log("Elegi una pasada o el resumen del dia primero.")
-            return
-        ruta, _ = QFileDialog.getSaveFileName(
-            self, "Guardar reporte", os.path.join(self._dir_reportes(), sugerido),
-            "Texto (*.txt)",
-        )
-        if not ruta:
-            return
-        try:
-            with open(ruta, "w", encoding="utf-8") as f:
-                f.write(texto)
-            self.control.append_log(f"Reporte guardado en {ruta}")
-        except Exception as e:  # noqa: BLE001
-            self.control.append_log(f"No pude guardar el reporte: {e}")
 
     def _lista_etb(self, accion: str, ruta: str | None = None) -> None:
         """Trae las acciones EASY TO BORROW y las carga en la watchlist o las guarda

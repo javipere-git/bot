@@ -141,6 +141,61 @@ class ReportePasada:
         fin = time.strftime("%H:%M:%S", time.localtime(self.fin)) if self.fin else "..."
         return f"{ini} - {fin}"
 
+    # ---------- guardar / leer como datos (para que sobrevivan al cierre) ----------
+    def to_dict(self) -> dict:
+        """Los numeros de la pasada como diccionario simple (para guardar en .json)."""
+        return {
+            "inicio": self.inicio,
+            "fin": self.fin,
+            "llenados_orden1": self.llenados_orden1,
+            "llenados_orden2": self.llenados_orden2,
+            "uso_orden2": self.uso_orden2,
+            # las claves de un dict en JSON son texto: guardo el nivel como str
+            "salidas_por_nivel": {str(k): v for k, v in self.salidas_por_nivel.items()},
+            "salidas_cruzar": self.salidas_cruzar,
+            "salidas_forzadas_guardia": self.salidas_forzadas_guardia,
+            "detalle_salidas": [
+                {"symbol": s.symbol, "nivel": s.nivel, "descripcion": s.descripcion}
+                for s in self.detalle_salidas
+            ],
+            "guardia_manual": self.guardia_manual,
+            "guardia_alarma_manual": self.guardia_alarma_manual,
+            "filtros": dict(self.filtros),
+            "filtros_activos": sorted(self.filtros_activos),
+            "config_texto": self.config_texto,
+            "neto": self.neto,
+            "neto_disponible": self.neto_disponible,
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "ReportePasada":
+        """Reconstruye una pasada guardada. El llamador lo envuelve en try/except."""
+        rep = cls(inicio=float(d.get("inicio") or time.time()))
+        fin = d.get("fin")
+        rep.fin = float(fin) if fin is not None else None
+        rep.llenados_orden1 = int(d.get("llenados_orden1", 0))
+        rep.llenados_orden2 = int(d.get("llenados_orden2", 0))
+        rep.uso_orden2 = bool(d.get("uso_orden2", False))
+        rep.salidas_por_nivel = {
+            int(k): int(v) for k, v in (d.get("salidas_por_nivel") or {}).items()
+        }
+        rep.salidas_cruzar = int(d.get("salidas_cruzar", 0))
+        rep.salidas_forzadas_guardia = int(d.get("salidas_forzadas_guardia", 0))
+        rep.detalle_salidas = [
+            SalidaInfo(x.get("symbol", ""), int(x.get("nivel", 0)),
+                       x.get("descripcion", ""))
+            for x in (d.get("detalle_salidas") or [])
+        ]
+        rep.guardia_manual = int(d.get("guardia_manual", 0))
+        rep.guardia_alarma_manual = int(d.get("guardia_alarma_manual", 0))
+        rep.filtros = {k: int(v) for k, v in (d.get("filtros") or {}).items()}
+        rep.filtros_activos = set(d.get("filtros_activos") or [])
+        rep.config_texto = d.get("config_texto", "")
+        neto = d.get("neto")
+        rep.neto = float(neto) if neto is not None else None
+        rep.neto_disponible = bool(d.get("neto_disponible", False))
+        return rep
+
 
 # ============================ armado del texto de config ============================
 def _u_offset(unit: OffsetUnit) -> str:

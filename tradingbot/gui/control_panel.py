@@ -99,11 +99,16 @@ class ControlPanel(QWidget):
         self.combo_reportes.setMinimumWidth(190)
         self.combo_reportes.setToolTip(
             "Elegi una pasada (por su horario de inicio-fin) o el resumen del dia, "
-            "y apreta Descargar para guardarlo en un archivo de texto.\n\n"
-            "Cada pasada es una corrida completa, de Iniciar a Detener."
+            "y apreta Abrir.\n\n"
+            "Cada pasada es una corrida completa, de Iniciar a Detener. Su reporte ya "
+            "quedo guardado en la carpeta 'reportes' al terminar; el boton lo abre.\n"
+            "El resumen del dia se genera, se guarda y se abre al pedirlo."
         )
-        self.btn_descargar_reporte = QPushButton("Descargar")
-        self.btn_descargar_reporte.setToolTip("Guarda el reporte elegido en un archivo .txt")
+        self.btn_descargar_reporte = QPushButton("Abrir")
+        self.btn_descargar_reporte.setToolTip(
+            "Abre el reporte elegido. Las pasadas ya estan guardadas en 'reportes'; "
+            "el resumen del dia se arma en el momento, se guarda y se abre."
+        )
         self.btn_descargar_reporte.setEnabled(False)   # se habilita cuando hay pasadas
         fila_reg.addWidget(self.combo_reportes)
         fila_reg.addWidget(self.btn_descargar_reporte)

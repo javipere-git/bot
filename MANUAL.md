@@ -677,11 +677,21 @@ version vieja.
 hasta que apretas **Detener** (o hasta que termina la watchlist). Puede abrir y
 cerrar varias posiciones; el reporte suma todo lo de esa corrida.
 
-**Donde se descarga**: en la linea de **"Registro:"**, a la derecha, hay un
-desplegable + boton **Descargar**. El desplegable lista el **resumen del dia** y cada
-pasada por su horario (`10:10:25 - 10:22:48`). Elegis una y apretas Descargar: se
-guarda en un `.txt`. Ademas, cada pasada se guarda sola en la carpeta `reportes/`
-apenas termina (por si cerras la app).
+**Donde se abre**: en la linea de **"Registro:"**, a la derecha, hay un desplegable +
+boton **Abrir**. El desplegable lista el **resumen del dia** y cada pasada por su
+horario (`10:10:25 - 10:22:48`).
+
+- **Una pasada**: su `.txt` ya quedo guardado al terminar la pasada -> el boton lo
+  **abre** (con el Bloc de notas).
+- **Resumen del dia**: no existe hasta pedirlo -> al elegirlo y apretar Abrir, se
+  **genera, se guarda** en la carpeta del dia y se **abre**. Se rearma cada vez, asi
+  siempre esta al dia.
+
+**Donde quedan los archivos**: en `reportes/AAAA-MM-DD/` (una carpeta por dia). Ahi
+estan los `.txt` legibles (los podes abrir tambien directo desde la carpeta). Dentro
+hay una subcarpeta `datos/` con un `.json` por pasada: es lo que la app relee al
+**reabrir**, para que el desplegable y el resumen del dia sigan disponibles aunque
+hayas cerrado y vuelto a abrir la app (solo los del **dia en curso**).
 
 **Que trae** (primero lo importante: entrada, salida, guardia y neto; despues los
 filtros; al final, la config con la que corrio):
@@ -707,8 +717,10 @@ el motor ya escribia en el registro; no agrega ni una llamada a la API. El neto 
 solo **2 lecturas** (una al Iniciar, otra al Detener), nunca durante el escaneo. Y
 todo el conteo es defensivo: si algo fallara ahi, el trading no se corta.
 
-**Nota**: por ahora las pasadas viven en memoria mientras la app este abierta; si la
-cerras, el desplegable arranca vacio, pero los `.txt` de la carpeta `reportes/` quedan.
+**Al reabrir la app**: si ya hubo pasadas hoy, la app las **recupera solas** de
+`reportes/AAAA-MM-DD/datos/` y vuelve a llenar el desplegable, asi el resumen del dia
+sigue completo. (Solo el dia en curso; los dias anteriores quedan archivados en sus
+carpetas, pero no se cargan al desplegable.)
 
 ---
 
