@@ -7,6 +7,8 @@ hilo del bot hacia la pantalla es seguro en Qt (se entregan en el hilo de la GUI
 """
 from __future__ import annotations
 
+import time
+
 from PySide6.QtCore import QObject, Signal, Slot
 
 from ..core.engine import BotEngine
@@ -31,10 +33,18 @@ class BotRunner(QObject):
     def run(self) -> None:
         try:
             outcome = self.engine.run_watchlist(self._symbols)
+            self._cerrar_reporte()
             self.finished.emit(outcome.value)
         except Exception as e:  # noqa: BLE001
+            self._cerrar_reporte()
             self.log.emit(f"ERROR inesperado del bot: {e}")
             self.finished.emit("error")
+
+    def _cerrar_reporte(self) -> None:
+        """Marca la hora de fin de la pasada (el neto lo completa la pantalla)."""
+        rep = self.engine.reporte
+        if rep is not None and rep.fin is None:
+            rep.fin = time.time()
 
     def stop(self) -> None:
         self.engine.stop()

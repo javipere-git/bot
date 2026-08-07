@@ -671,6 +671,47 @@ version vieja.
 
 ---
 
+## 4c. Reporte de cada pasada del bot (06/08/2026)
+
+**Que es una pasada**: una corrida completa del bot, desde que apretas **Iniciar**
+hasta que apretas **Detener** (o hasta que termina la watchlist). Puede abrir y
+cerrar varias posiciones; el reporte suma todo lo de esa corrida.
+
+**Donde se descarga**: en la linea de **"Registro:"**, a la derecha, hay un
+desplegable + boton **Descargar**. El desplegable lista el **resumen del dia** y cada
+pasada por su horario (`10:10:25 - 10:22:48`). Elegis una y apretas Descargar: se
+guarda en un `.txt`. Ademas, cada pasada se guarda sola en la carpeta `reportes/`
+apenas termina (por si cerras la app).
+
+**Que trae** (primero lo importante: entrada, salida, guardia y neto; despues los
+filtros; al final, la config con la que corrio):
+
+- **Neto de la pasada**: la ganancia/perdida realizada. Se calcula por DIFERENCIA del
+  "realizado" que informa el broker entre el inicio y el fin de la pasada. Por eso
+  viene **neto de comisiones** y **cuenta tambien lo que cerraste a mano** (guardia).
+  Si el broker no da el dato, dice "no disponible".
+- **Entradas**: cuantas se llenaron con la Orden 1 y cuantas con la Orden 2 (si la
+  Orden 2 esta apagada, lo aclara).
+- **Salidas**: por que nivel cerro cada posicion y cuantas cerraron cruzando el
+  spread; aparte, las salidas forzadas por el guardia.
+- **Guardia**: cuantas veces freno y paso a manual, y cuantas alarmas sonaron estando
+  ya en manual.
+- **Filtros**: cuantas acciones salteo CADA filtro que tenias puesto (los que no
+  configuraste no aparecen). Si manana se agrega un filtro nuevo, se reporta solo.
+
+**Resumen del dia**: suma todas las pasadas de hoy (entradas, salidas por nivel,
+guardia, filtros y neto total), con el detalle pasada por pasada al final.
+
+**Rendimiento**: contar NO frena el bot. Son sumas en memoria al lado de puntos donde
+el motor ya escribia en el registro; no agrega ni una llamada a la API. El neto son
+solo **2 lecturas** (una al Iniciar, otra al Detener), nunca durante el escaneo. Y
+todo el conteo es defensivo: si algo fallara ahi, el trading no se corta.
+
+**Nota**: por ahora las pasadas viven en memoria mientras la app este abierta; si la
+cerras, el desplegable arranca vacio, pero los `.txt` de la carpeta `reportes/` quedan.
+
+---
+
 ## 5. Indicador de conexion (encabezado)
 
 Al lado del banner PAPER/LIVE: **"streaming: conectado / intentando conectar... / en

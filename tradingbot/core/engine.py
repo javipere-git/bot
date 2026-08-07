@@ -38,6 +38,7 @@ from .config import (
     OrderConfig,
 )
 from .models import Order, OrderRequest, OrderStatus, OrderType, Position, Quote, Side
+from .reporte import ReportePasada, resumen_config
 
 
 class Outcome(str, Enum):
@@ -101,6 +102,82 @@ class BotEngine:
         self._entry_ref: float | None = None
         self._baseline_vigilancia: float | None = None
         self._observador = observador   # cuenta los cambios de bid/ask (del streaming)
+        # reporte de la pasada (contadores en memoria; se crea al arrancar la corrida).
+        # Contar nunca frena ni traba el bot: son sumas de enteros, y los helpers
+        # _rep_* son defensivos (si el reporte es None o algo falla, no hacen nada).
+        self._reporte: ReportePasada | None = None
+
+    @property
+    def reporte(self) -> ReportePasada | None:
+        """El reporte de la ultima/actual pasada (la pantalla lo lee al terminar)."""
+        return self._reporte
+
+    # ---- conteo del reporte (defensivo: jamas afecta el trading) ----
+    def _rep_filtro(self, clave: str) -> None:
+        if self._reporte is not None:
+            self._reporte.contar_filtro(clave)
+
+    def _rep_entrada(self, cual: int) -> None:
+        if self._reporte is not None:
+            self._reporte.contar_entrada(cual)
+
+    def _rep_salida(self, sym: str, nivel: int, level) -> None:
+        if self._reporte is None:
+            return
+        if getattr(level, "cross", False):
+            desc = "cruzar el spread"
+        else:
+            unidad = "% del spread" if level.unit == OffsetUnit.PERCENT_SPREAD else " USD"
+            desc = f"{level.offset:g}{unidad}"
+        self._reporte.contar_salida(sym, nivel, getattr(level, "cross", False), desc)
+
+    def _rep_salida_forzada(self) -> None:
+        if self._reporte is not None:
+            self._reporte.contar_salida_forzada()
+
+    def _rep_guardia_manual(self) -> None:
+        if self._reporte is not None:
+            self._reporte.contar_guardia_manual()
+
+    def _rep_guardia_alarma(self) -> None:
+        if self._reporte is not None:
+            self._reporte.contar_guardia_alarma()
+
+    def _iniciar_reporte(self) -> None:
+        """Crea el reporte de la pasada. Si algo fallara, deja el reporte en None y el
+        bot sigue igual (el conteo es accesorio, nunca condiciona el trading)."""
+        try:
+            rep = ReportePasada()
+            rep.uso_orden2 = self._cfg.order2 is not None
+            rep.config_texto = resumen_config(self._cfg)
+            rep.filtros_activos = self._filtros_activos()
+            self._reporte = rep
+        except Exception:  # noqa: BLE001
+            self._reporte = None
+
+    def _filtros_activos(self) -> set:
+        """Que filtros estan puestos en esta pasada (para mostrarlos aunque salteen 0)."""
+        c = self._cfg
+        activos = set()
+        if c.spread_min is not None:
+            activos.add("spread_min")
+        if c.spread_max is not None:
+            activos.add("spread_max")
+        if c.max_spread_pct_precio is not None:
+            activos.add("spread_pct_precio")
+        if c.volume_min is not None:
+            activos.add("volumen_dia_min")
+        if c.volume_max is not None:
+            activos.add("volumen_dia_max")
+        if c.max_cambios_bid is not None:
+            activos.add("cambios_bid")
+        if c.max_cambios_ask is not None:
+            activos.add("cambios_ask")
+        if c.max_spread_pct is not None:
+            activos.add("spread_reciente")
+        if c.max_volumen_seg is not None:
+            activos.add("volumen_reciente")
+        return activos
 
     # ===================== control =====================
     def stop(self) -> None:
@@ -145,6 +222,7 @@ class BotEngine:
                     self._log(f"{sym}: posicion cerrada, dejo de vigilar.")
                     break
                 if self._check_guard(sym, pos, baseline) is not None:
+                    self._rep_guardia_alarma()
                     self._log(
                         f"*** {sym}: GUARDIA (ya en manual) -> el precio se corrio en "
                         f"contra. Miralo YA. ***"
@@ -251,6 +329,7 @@ class BotEngine:
         - Si un cierre pasa a MANUAL, se PAUSA hasta que cierres a mano y reanudes.
         - Si saltan los strikes / se pierde la conexion, se DETIENE (ABORTED).
         """
+        self._iniciar_reporte()
         while not self._stopped and not self._abort:
             for sym in symbols:
                 self._wait_if_paused()
@@ -379,6 +458,7 @@ class BotEngine:
         if not ok:
             return None
         if self._entered_after_wait(order.id, self._cfg.order1.timeout_s):
+            self._rep_entrada(1)
             return self._on_entered(sym, order.id)
 
         if self._cfg.order2 is not None:
@@ -396,6 +476,7 @@ class BotEngine:
                 if order is None:
                     return None
                 if filled or self._entered_after_wait(order.id, self._cfg.order2.timeout_s):
+                    self._rep_entrada(2)
                     return self._on_entered(sym, order.id)
 
         if self._cancel_and_check_fill(order.id):
@@ -462,8 +543,10 @@ class BotEngine:
                         and self._is_flat(sym):
                     self._log(f"{sym}: la salida se lleno JUSTO al cancelarla (orden fantasma).")
                     return Outcome.CLOSED
+                self._rep_guardia_manual()
                 return Outcome.MANUAL_GUARD
             if action == GuardAction.FORCE_EXIT:
+                self._rep_salida_forzada()
                 self._force_exit(order.id if order is not None else None, sym, pos)
                 return Outcome.CLOSED
             price = self._exit_price(pos, level, q)
@@ -502,14 +585,17 @@ class BotEngine:
 
             res = self._wait_exit_fill(order.id, level.timeout_s, sym, pos, baseline)
             if res == "filled":
+                self._rep_salida(sym, i, level)
                 self._log(f"{sym}: salida completada en el nivel {i}.")
                 return Outcome.CLOSED
             if res == "guard_manual":
                 if self._cancel_and_check_fill(order.id) and self._is_flat(sym):
                     self._log(f"{sym}: la salida se lleno JUSTO al cancelarla (orden fantasma).")
                     return Outcome.CLOSED
+                self._rep_guardia_manual()
                 return Outcome.MANUAL_GUARD
             if res == "guard_force":
+                self._rep_salida_forzada()
                 self._force_exit(order.id, sym, pos)
                 return Outcome.CLOSED
 
@@ -733,6 +819,7 @@ class BotEngine:
                 continue                      # ese lado no filtra nada
             cambios = contar(sym, ventana)
             if cambios > tope:
+                self._rep_filtro("cambios_" + lado)
                 self._log(
                     f"{sym}: el {lado} se movio {cambios} veces en {ventana:.0f}s "
                     f"(tope {tope}) -> salteo, demasiado nervioso"
@@ -745,6 +832,7 @@ class BotEngine:
             if maximo is not None:
                 pct = (maximo / spread_actual) * 100.0
                 if pct > tope_spread:
+                    self._rep_filtro("spread_reciente")
                     self._log(
                         f"{sym}: el spread llego a {maximo:.2f} en {v_spr:.0f}s, "
                         f"{pct:.0f}% del actual ({spread_actual:.2f}) "
@@ -758,6 +846,7 @@ class BotEngine:
         if tope_vol is not None:
             operado = obs.volumen(sym, v_vol)
             if operado > tope_vol:
+                self._rep_filtro("volumen_reciente")
                 self._log(
                     f"{sym}: se operaron {operado:,.0f} acciones en {v_vol:.0f}s "
                     f"(tope {tope_vol:,}) -> salteo, demasiada actividad"
@@ -769,8 +858,10 @@ class BotEngine:
 
     def _spread_ok(self, spread: float) -> bool:
         if self._cfg.spread_min is not None and spread < self._cfg.spread_min:
+            self._rep_filtro("spread_min")
             return False
         if self._cfg.spread_max is not None and spread > self._cfg.spread_max:
+            self._rep_filtro("spread_max")
             return False
         return True
 
@@ -794,6 +885,7 @@ class BotEngine:
             return True
         pct = (spread / medio) * 100.0
         if pct >= tope:
+            self._rep_filtro("spread_pct_precio")
             self._log(
                 f"{sym}: el spread {spread:.2f} es {pct:.2f}% del precio "
                 f"({medio:.2f}) -> salteo, llega al {tope:g}%"
@@ -807,8 +899,10 @@ class BotEngine:
     def _volume_ok(self, volume: int) -> bool:
         """Volumen TOTAL operado en el dia (acumulado hasta este momento)."""
         if self._cfg.volume_min is not None and volume < self._cfg.volume_min:
+            self._rep_filtro("volumen_dia_min")
             return False
         if self._cfg.volume_max is not None and volume > self._cfg.volume_max:
+            self._rep_filtro("volumen_dia_max")
             return False
         return True
 

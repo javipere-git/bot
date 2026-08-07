@@ -15,5 +15,8 @@ venv/
 registro_*
 logs/
 
+# Reportes de las pasadas del bot (se generan solos; no van al repo)
+reportes/
+
 # Codigo de referencia de Marian (propiedad de el; solo referencia visual)
 referencia_marian/

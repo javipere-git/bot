@@ -91,8 +91,24 @@ class ControlPanel(QWidget):
         # --- botones ---
         root.addLayout(self._botones())
 
-        # --- registro (log) ---
-        root.addWidget(QLabel("Registro:"))
+        # --- registro (log) + descarga de reportes de pasadas ---
+        fila_reg = QHBoxLayout()
+        fila_reg.addWidget(QLabel("Registro:"))
+        fila_reg.addStretch(1)
+        self.combo_reportes = QComboBox()
+        self.combo_reportes.setMinimumWidth(190)
+        self.combo_reportes.setToolTip(
+            "Elegi una pasada (por su horario de inicio-fin) o el resumen del dia, "
+            "y apreta Descargar para guardarlo en un archivo de texto.\n\n"
+            "Cada pasada es una corrida completa, de Iniciar a Detener."
+        )
+        self.btn_descargar_reporte = QPushButton("Descargar")
+        self.btn_descargar_reporte.setToolTip("Guarda el reporte elegido en un archivo .txt")
+        self.btn_descargar_reporte.setEnabled(False)   # se habilita cuando hay pasadas
+        fila_reg.addWidget(self.combo_reportes)
+        fila_reg.addWidget(self.btn_descargar_reporte)
+        root.addLayout(fila_reg)
+
         self.log = QPlainTextEdit()
         self.log.setReadOnly(True)
         self.log.setMaximumBlockCount(2000)

@@ -175,7 +175,17 @@ class MainWindow(QMainWindow):
         self.control.btn_detener.clicked.connect(self._detener)
         self.control.btn_etb_cargar.clicked.connect(lambda: self._lista_etb("cargar"))
         self.control.btn_etb_bajar.clicked.connect(lambda: self._lista_etb("bajar"))
+        self.control.btn_descargar_reporte.clicked.connect(self._descargar_reporte)
         self._set_running(False)
+
+        # --- reportes de las pasadas del dia (contadores del motor + neto por
+        # diferencia del realizado del broker). Viven en memoria y se guardan en disco
+        # al terminar cada pasada; el desplegable los lista por horario. ---
+        self._reportes_dia: list = []           # ReportePasada de hoy
+        self._ultimo_realizado: float | None = None   # ultimo "realizado" que informo el broker
+        self._realizado_inicio: float | None = None   # foto al apretar Iniciar
+        self._broker_pasada = None              # broker de la corrida (para leer el neto)
+        self._refrescar_combo_reportes()
 
         # monitoreo en vivo (su propio broker de lectura, en otro hilo)
         self._arrancar_monitoreo()
@@ -285,6 +295,12 @@ class MainWindow(QMainWindow):
                 f"Filtro de movimiento activo: sigo el bid/ask de {len(symbols)} "
                 f"simbolos por streaming."
             )
+        # foto del "realizado" del broker al arrancar: el neto de la pasada sera la
+        # diferencia contra el realizado al terminar (asi sale neto de comisiones e
+        # incluye cierres a mano). Es 1 lectura, ANTES de que el bot empiece a escanear.
+        self._broker_pasada = broker
+        self._realizado_inicio = self._leer_realizado(broker)
+
         self._runner = BotRunner(broker, config, symbols, observador=self._observador)
         self._runner.moveToThread(self._thread)
         self._runner.log.connect(self.control.append_log)
@@ -346,6 +362,8 @@ class MainWindow(QMainWindow):
 
     def _on_finished(self, outcome: str) -> None:
         self.control.append_log(f"Bot finalizo: {outcome}")
+        # tomo el reporte ANTES de soltar el runner
+        rep = self._runner.engine.reporte if self._runner is not None else None
         if self._thread is not None:
             self._thread.quit()
             self._thread.wait()
@@ -353,6 +371,116 @@ class MainWindow(QMainWindow):
         self._runner = None
         self._set_running(False)
         self._bot_escaneando(False)
+        self._finalizar_reporte(rep)
+
+    # ===================== reportes de las pasadas =====================
+    def _recordar_realizado(self, dia) -> None:
+        """Guarda el ultimo 'realizado' que informo el broker (para el neto)."""
+        try:
+            self._ultimo_realizado = float(dia.realizado)
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _leer_realizado(self, broker) -> float | None:
+        """Lee el realizado del dia del broker (defensivo). Si no puede, cae al ultimo
+        valor que llego por el monitoreo; si tampoco, None (el neto quedara n/d)."""
+        try:
+            dia = broker.get_day_pnl()
+            if dia is not None:
+                return float(dia.realizado)
+        except Exception:  # noqa: BLE001
+            pass
+        return self._ultimo_realizado
+
+    def _finalizar_reporte(self, rep) -> None:
+        """Cierra la pasada: completa el neto, la guarda en memoria y en disco, y
+        refresca el desplegable. Nunca corta la app si algo falla."""
+        if rep is None:
+            return
+        try:
+            realizado_fin = self._leer_realizado(self._broker_pasada) \
+                if self._broker_pasada is not None else self._ultimo_realizado
+            if self._realizado_inicio is not None and realizado_fin is not None:
+                rep.neto = realizado_fin - self._realizado_inicio
+                rep.neto_disponible = True
+            self._reportes_dia.append(rep)
+            self._guardar_reporte_disco(rep)
+            self._refrescar_combo_reportes()
+            neto = (f"{'+' if rep.neto >= 0 else ''}{rep.neto:.2f} USD"
+                    if rep.neto_disponible and rep.neto is not None else "n/d")
+            self.control.append_log(
+                f"Reporte de la pasada listo ({rep.rango_horario()}, neto {neto}). "
+                f"Descargalo desde el desplegable al lado de 'Registro:'."
+            )
+        except Exception as e:  # noqa: BLE001
+            self.control.append_log(f"No pude armar el reporte de la pasada: {e}")
+        finally:
+            self._realizado_inicio = None
+            self._broker_pasada = None
+
+    def _dir_reportes(self) -> str:
+        raiz = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        d = os.path.join(raiz, "reportes")
+        os.makedirs(d, exist_ok=True)
+        return d
+
+    def _guardar_reporte_disco(self, rep) -> None:
+        """Guarda la pasada en reportes/ para que sobreviva si cerras la app."""
+        from ..core.reporte import render_pasada
+        import time as _t
+        try:
+            nombre = _t.strftime("pasada_%Y-%m-%d_%H-%M-%S.txt", _t.localtime(rep.inicio))
+            with open(os.path.join(self._dir_reportes(), nombre), "w",
+                      encoding="utf-8") as f:
+                f.write(render_pasada(rep))
+        except Exception:  # noqa: BLE001
+            pass   # que no falle nunca: es solo el respaldo en disco
+
+    def _refrescar_combo_reportes(self) -> None:
+        """Llena el desplegable: resumen del dia + una entrada por pasada (por horario)."""
+        combo = self.control.combo_reportes
+        combo.blockSignals(True)
+        combo.clear()
+        if self._reportes_dia:
+            combo.addItem(f"Resumen del dia ({len(self._reportes_dia)} pasadas)", "resumen")
+            for i, rep in enumerate(self._reportes_dia):
+                combo.addItem(rep.rango_horario(), i)
+            self.control.btn_descargar_reporte.setEnabled(True)
+        else:
+            combo.addItem("(todavia no hay pasadas)", None)
+            self.control.btn_descargar_reporte.setEnabled(False)
+        combo.blockSignals(False)
+
+    def _descargar_reporte(self) -> None:
+        from ..core.reporte import render_pasada, render_resumen_dia
+        import time as _t
+        if not self._reportes_dia:
+            self.control.append_log("Todavia no hay ninguna pasada para descargar.")
+            return
+        dato = self.control.combo_reportes.currentData()
+        if dato == "resumen":
+            texto = render_resumen_dia(self._reportes_dia)
+            sugerido = _t.strftime("resumen_dia_%Y-%m-%d.txt")
+        elif isinstance(dato, int) and 0 <= dato < len(self._reportes_dia):
+            rep = self._reportes_dia[dato]
+            texto = render_pasada(rep)
+            sugerido = _t.strftime("pasada_%Y-%m-%d_%H-%M-%S.txt",
+                                   _t.localtime(rep.inicio))
+        else:
+            self.control.append_log("Elegi una pasada o el resumen del dia primero.")
+            return
+        ruta, _ = QFileDialog.getSaveFileName(
+            self, "Guardar reporte", os.path.join(self._dir_reportes(), sugerido),
+            "Texto (*.txt)",
+        )
+        if not ruta:
+            return
+        try:
+            with open(ruta, "w", encoding="utf-8") as f:
+                f.write(texto)
+            self.control.append_log(f"Reporte guardado en {ruta}")
+        except Exception as e:  # noqa: BLE001
+            self.control.append_log(f"No pude guardar el reporte: {e}")
 
     def _lista_etb(self, accion: str, ruta: str | None = None) -> None:
         """Trae las acciones EASY TO BORROW y las carga en la watchlist o las guarda
@@ -481,6 +609,7 @@ class MainWindow(QMainWindow):
         self._market_worker.closed_orders.connect(self.monitor.set_closed_orders)
         self._market_worker.closed_orders.connect(self._on_closed_orders)
         self._market_worker.day_pnl.connect(self.monitor.set_day_pnl)
+        self._market_worker.day_pnl.connect(self._recordar_realizado)
         self._market_worker.quote.connect(self.ladder.actualizar_quote)
         self._market_worker.orders.connect(self.ladder.set_orders)
         self._market_worker.positions.connect(self.ladder.set_positions)
