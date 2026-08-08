@@ -22,7 +22,7 @@ from __future__ import annotations
 import time
 from typing import Callable
 
-from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtCore import Qt, QThread, QTimer, Signal, Slot
 from PySide6.QtGui import QBrush, QColor, QCursor
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -126,6 +126,13 @@ class LadderPanel(QWidget):
     AYUDA = ("Click en Bid = COMPRA / click en Ask = VENTA.  "
              "Click en tu orden = cancelar; arrastrala para moverla.")
     STALE_SECS = 8    # segundos sin quote nuevo -> aviso "datos viejos"
+
+    # Pedidos al hilo que habla con el broker (ver ladder_worker.py). Van por
+    # conexion EN COLA: el click vuelve al instante y las llamadas salen en orden.
+    pedir_mandar = Signal(object, str, int, float, bool)   # side, symbol, qty, precio, ext
+    pedir_mover = Signal(object, float)                    # [(id, duracion)], precio
+    pedir_cancelar = Signal(object)                        # [ids]
+    pedir_cancelar_todas = Signal()
 
     def __init__(
         self,
@@ -302,6 +309,51 @@ class LadderPanel(QWidget):
         self._repintar_timer.setInterval(150)
         self._repintar_timer.timeout.connect(self._repintar)
         self._repintar_timer.start()
+
+        # Las llamadas al broker van a un hilo propio: el click vuelve al instante y
+        # la ventana no se congela esperando la respuesta. Ver ladder_worker.py.
+        self._arrancar_worker()
+
+    # ---------- hilo que habla con el broker ----------
+    def _arrancar_worker(self) -> None:
+        """Arranca el hilo que manda/mueve/cancela. Si por lo que sea no arranca, la
+        app sigue operando igual: cae al camino directo (mas lento, pero funciona)."""
+        self._hilo = None
+        self._worker = None
+        try:
+            from .ladder_worker import LadderWorker
+            self._hilo = QThread()
+            self._worker = LadderWorker(self._broker_provider)
+            self._worker.moveToThread(self._hilo)
+            # OJO: el aviso se conecta a un SLOT DE ESTE PANEL, no directo a self._log.
+            # El panel vive en el hilo de la pantalla, asi que Qt entrega el mensaje ahi
+            # (conexion en cola). Si se conectara a una funcion suelta, el texto se
+            # escribiria en el widget DESDE EL HILO DEL BROKER -> tocar la interfaz
+            # fuera de su hilo tumba la app.
+            self._worker.log.connect(self._log_del_worker)
+            # conexiones EN COLA (cruzan de hilo): se ejecutan en orden y de a una
+            self.pedir_mandar.connect(self._worker.mandar)
+            self.pedir_mover.connect(self._worker.mover)
+            self.pedir_cancelar.connect(self._worker.cancelar)
+            self.pedir_cancelar_todas.connect(self._worker.cancelar_todas)
+            self._hilo.start()
+        except Exception as e:  # noqa: BLE001
+            self._hilo = None
+            self._worker = None
+            self._log(f"Ladder: sin hilo propio para las ordenes ({e}); uso el camino directo.")
+
+    @Slot(str)
+    def _log_del_worker(self, mensaje: str) -> None:
+        """Recibe los avisos del hilo del broker YA en el hilo de la pantalla."""
+        self._log(mensaje)
+
+    def detener(self) -> None:
+        """La ventana lo llama al cerrar: corta el hilo con prolijidad."""
+        if getattr(self, "_hilo", None) is not None:
+            self._hilo.quit()
+            self._hilo.wait(3000)
+            self._hilo = None
+            self._worker = None
 
     # ---------- simbolo ----------
     def _cambiar_symbol(self) -> None:
@@ -662,12 +714,19 @@ class LadderPanel(QWidget):
             self._log("Ladder: no hay conexion para operar.")
             return
         qty = self.spin_size.value()
+        # La red de seguridad va ANTES de encolar, aca mismo: no cuesta ninguna
+        # llamada (usa las posiciones que el monitoreo ya trajo) y asi una venta que
+        # abriria un corto sin querer NUNCA llega a salir.
         if not self._venta_permitida(broker, side, qty):
             return
-        try:
+        ext = self.chk_ext.isChecked()
+        if self._worker is not None:
+            self.pedir_mandar.emit(side, self._symbol, qty, round(precio, 2), ext)
+            return
+        try:                                        # sin hilo: camino directo
             orden = broker.place_order(
                 OrderRequest(self._symbol, side, qty, round(precio, 2), OrderType.LIMIT,
-                             extended=self.chk_ext.isChecked())
+                             extended=ext)
             )
             self._log(f"Ladder: {side.value} {qty} {self._symbol} @ {precio:.2f} "
                       f"enviada (id {orden.id}).")
@@ -679,7 +738,10 @@ class LadderPanel(QWidget):
         if broker is None:
             self._log("Ladder: no hay conexion para operar.")
             return
-        for oid in ids:
+        if self._worker is not None:
+            self.pedir_cancelar.emit(list(ids))
+            return
+        for oid in ids:                             # sin hilo: camino directo
             try:
                 broker.cancel_order(oid)
                 self._log(f"Ladder: orden {oid} cancelada.")
@@ -691,7 +753,12 @@ class LadderPanel(QWidget):
         if broker is None:
             self._log("Ladder: no hay conexion para operar.")
             return
-        try:
+        if self._worker is not None:
+            # esta es la mas pesada de todas (lee TODAS las ordenes del dia): sacarla
+            # del hilo de la pantalla es justamente lo que evita el tiron mas largo
+            self.pedir_cancelar_todas.emit()
+            return
+        try:                                        # sin hilo: camino directo
             abiertas = broker.get_open_orders()
         except Exception as e:  # noqa: BLE001
             self._log(f"Ladder: no pude leer las ordenes ({e})")
@@ -716,12 +783,18 @@ class LadderPanel(QWidget):
         if broker is None:
             self._log("Ladder: no hay conexion para operar.")
             return
+        # La duracion de cada orden se resuelve ACA, con las ordenes que la pantalla ya
+        # tiene cargadas (el hilo no toca datos de la pantalla). Se respeta la que YA
+        # tiene: si es de horario extendido (pre/post) y se manda "day", la rechazan.
+        pares = []
         for oid in ids:
+            orden = next((o for o in self._orders if str(o.id) == str(oid)), None)
+            pares.append((oid, getattr(orden, "duration", None)))
+        if self._worker is not None:
+            self.pedir_mover.emit(pares, round(nuevo, 2))
+            return
+        for oid, dur in pares:                      # sin hilo: camino directo
             try:
-                # se respeta la duracion que YA tiene la orden: si es de horario
-                # extendido (pre/post) y se manda "day", el broker la rechaza
-                orden = next((o for o in self._orders if str(o.id) == str(oid)), None)
-                dur = getattr(orden, "duration", None)
                 broker.modify_order(oid, price=round(nuevo, 2), duration=dur)
                 self._log(f"Ladder: orden {oid} movida a {nuevo:.2f}.")
             except Exception as e:  # noqa: BLE001

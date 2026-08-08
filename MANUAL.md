@@ -724,6 +724,48 @@ carpetas, pero no se cargan al desplegable.)
 
 ---
 
+## 4d. El ladder no congela la pantalla (07/08/2026)
+
+**Que pasaba antes**: al hacer click en el ladder, la llamada al broker se hacia ahi
+mismo, en el hilo de la pantalla. Mientras el broker contestaba (100-400 ms, a veces
+mas), la ventana quedaba **congelada**: no repintaba ni respondia. Se sentia lento
+aunque la orden saliera rapido. La peor era **"Cancelar todo"**, que ademas lee TODAS
+las ordenes del dia.
+
+**Como quedo**: las llamadas (mandar / mover / cancelar / cancelar todo) corren en un
+**hilo propio** del ladder (`gui/ladder_worker.py`). El click vuelve al instante.
+
+Medido en `examples/demo_ladder_sin_congelar.py` con un broker que tarda 300 ms:
+tres clicks seguidos **devuelven en 0 ms** (antes bloqueaban 900 ms).
+
+**Lo que NO cambio**: se manda exactamente lo mismo al broker, con la misma cantidad
+de llamadas a la API (ni una mas). El bot no se toca.
+
+**Cuatro garantias, verificadas en el demo:**
+
+1. **En orden y de a una**: los pedidos viajan por conexiones en cola de Qt hacia UN
+   solo hilo. Dos clicks seguidos salen en ese orden y nunca se solapan.
+2. **Las redes de seguridad siguen ANTES, en la pantalla**: la validacion de que una
+   venta no abra un corto sin querer no cuesta llamadas (usa las posiciones que el
+   monitoreo ya trajo), asi que se hace antes de encolar. Si no pasa, al broker no le
+   llega nada.
+3. **La interfaz solo se toca desde su hilo**: los avisos del hilo del broker entran
+   por un slot del panel (`_log_del_worker`), asi Qt los entrega en el hilo de la
+   pantalla. Escribir en un widget desde otro hilo tumba la app.
+4. **Conexion HTTP sin compartir**: el ladder usa una instancia de broker DEDICADA
+   (`_manual_broker`, distinta de la del monitoreo), y ese hilo es el unico que la
+   toca. Compartir una `requests.Session` entre hilos corrompe la capa SSL y mata el
+   proceso (paso de verdad en la app de un companiero).
+
+**Si el hilo no arrancara** por lo que sea, el ladder cae solo al camino directo (mas
+lento, pero funciona): nunca te quedas sin poder operar.
+
+**Lo que todavia NO hace** (posible paso 2): la orden se dibuja recien cuando el
+broker la confirma y se relee. Dibujarla al instante (en gris hasta confirmar) es lo
+que hace que la app de un companiero se sienta aun mas rapida.
+
+---
+
 ## 5. Indicador de conexion (encabezado)
 
 Al lado del banner PAPER/LIVE: **"streaming: conectado / intentando conectar... / en

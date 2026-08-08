@@ -819,6 +819,7 @@ class MainWindow(QMainWindow):
         if self._market_thread is not None:
             self._market_thread.quit()
             self._market_thread.wait(3000)
+        self.ladder.detener()      # hilo que manda/mueve/cancela desde el ladder
         if self._stream is not None:
             self._stream.stop()
         if self._avisos is not None:
