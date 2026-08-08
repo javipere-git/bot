@@ -18,6 +18,7 @@ from ..connectors.alpaca_trade_stream import AlpacaTradeStream
 from ..connectors.tradier_account_stream import TradierAccountStream
 from ..connectors.hibrido import BrokerHibrido
 from ..connectors.tradier import TradierBroker
+from ..connectors.tastytrade import TastytradeBroker
 
 
 @dataclass
@@ -77,6 +78,17 @@ def _alpaca_live_disponible(cfg: configparser.ConfigParser) -> bool:
         return False
     return bool(cfg["alpaca"].get("live_key_id", "").strip()) and bool(
         cfg["alpaca"].get("live_secret", "").strip()
+    )
+
+
+def _tasty_disponible(cfg: configparser.ConfigParser, entorno: str) -> bool:
+    """Tastytrade necesita el client secret y el refresh token del grant personal."""
+    if not cfg.has_section("tastytrade"):
+        return False
+    pre = "sandbox" if entorno == "sandbox" else "production"
+    s = cfg["tastytrade"]
+    return bool(s.get(f"{pre}_client_secret", "").strip()) and bool(
+        s.get(f"{pre}_refresh_token", "").strip()
     )
 
 
@@ -189,6 +201,56 @@ def perfiles_disponibles() -> list[Perfil]:
                 AlpacaMarketStream.from_credentials(environment="live")
             ),
             _crear_avisos=avisos_alpaca("live"),
+        ))
+
+    # ---- Tastytrade ----
+    # SANDBOX: Tasty NO da cotizaciones por REST fuera de produccion (devuelve 502),
+    # asi que el perfil util es el HIBRIDO: opera en Tasty y los precios salen de
+    # Tradier (produccion, en vivo). El de datos propios se ofrece igual, por si se
+    # quiere usar solo para mandar ordenes.
+    if _tasty_disponible(cfg, "sandbox"):
+        if hay_datos_tradier:
+            perfiles.append(Perfil(
+                id="tasty_sandbox_datos_tradier",
+                broker_nombre="Tastytrade",
+                cuenta_texto="SANDBOX (simulado)   -   datos de Tradier (NBBO real)",
+                es_live=False,
+                _crear_broker=lambda: BrokerHibrido(
+                    operativa=TastytradeBroker.from_credentials(environment="sandbox"),
+                    datos=TradierBroker.from_credentials(environment="production"),
+                ),
+                _crear_stream=stream_factory,   # streaming de precios de Tradier
+            ))
+        perfiles.append(Perfil(
+            id="tasty_sandbox",
+            broker_nombre="Tastytrade",
+            cuenta_texto="SANDBOX (simulado)   -   SIN precios (solo ordenes)",
+            es_live=False,
+            _crear_broker=lambda: TastytradeBroker.from_credentials(environment="sandbox"),
+        ))
+
+    # LIVE (DINERO REAL): en produccion Tasty SI tiene cotizaciones por REST
+    # (cuentas con fondos), asi que puede andar solo. Igual se ofrece la variante
+    # con datos de Tradier. Hereda todas las salvaguardas de live por es_live=True.
+    if _tasty_disponible(cfg, "production"):
+        if hay_datos_tradier:
+            perfiles.append(Perfil(
+                id="tasty_live_datos_tradier",
+                broker_nombre="Tastytrade",
+                cuenta_texto="LIVE - DINERO REAL   -   datos de Tradier (NBBO real)",
+                es_live=True,
+                _crear_broker=lambda: BrokerHibrido(
+                    operativa=TastytradeBroker.from_credentials(environment="production"),
+                    datos=TradierBroker.from_credentials(environment="production"),
+                ),
+                _crear_stream=stream_factory,
+            ))
+        perfiles.append(Perfil(
+            id="tasty_live",
+            broker_nombre="Tastytrade",
+            cuenta_texto="LIVE - DINERO REAL   -   datos propios de Tastytrade",
+            es_live=True,
+            _crear_broker=lambda: TastytradeBroker.from_credentials(environment="production"),
         ))
 
     return perfiles
