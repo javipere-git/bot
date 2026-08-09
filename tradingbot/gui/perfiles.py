@@ -24,12 +24,25 @@ from ..connectors.tastytrade import TastytradeBroker
 @dataclass
 class Perfil:
     id: str                          # identificador corto (para el log, etc.)
-    broker_nombre: str               # "Tradier" / "Alpaca"
+    broker_nombre: str               # "Tradier" / "Alpaca" / "Tastytrade"
     cuenta_texto: str                # "PAPER (simulado)" / "LIVE - DINERO REAL"
     es_live: bool                    # True = dinero real (banner verde, doble confirmacion)
     _crear_broker: Callable[[], object]
     _crear_stream: Callable[[], object] | None = None
     _crear_avisos: Callable[[], object] | None = None
+    # De donde salen los PRECIOS. Vacio = del mismo broker donde se opera. La pantalla
+    # de inicio arma con esto el desplegable de "datos de mercado" (ver startup.py).
+    datos_nombre: str = ""
+    # Etiqueta corta de la cuenta para los desplegables: PAPER / LIVE / SANDBOX.
+    modo_texto: str = ""
+
+    @property
+    def datos(self) -> str:
+        return self.datos_nombre or self.broker_nombre
+
+    @property
+    def modo(self) -> str:
+        return self.modo_texto or ("LIVE" if self.es_live else "PAPER")
 
     def crear_broker(self):
         return self._crear_broker()
@@ -120,6 +133,8 @@ def perfiles_disponibles() -> list[Perfil]:
     if cfg.has_section("tradier") and cfg["tradier"].get("sandbox_token", "").strip():
         perfiles.append(Perfil(
             id="tradier_paper",
+            datos_nombre="Tradier",
+            modo_texto="PAPER",
             broker_nombre="Tradier",
             cuenta_texto="PAPER (simulado)   -   SIN DINERO REAL",
             es_live=False,
@@ -131,6 +146,8 @@ def perfiles_disponibles() -> list[Perfil]:
     if _tradier_live_disponible(cfg):
         perfiles.append(Perfil(
             id="tradier_live",
+            datos_nombre="Tradier",
+            modo_texto="LIVE",
             broker_nombre="Tradier",
             cuenta_texto="LIVE   -   DINERO REAL",
             es_live=True,
@@ -144,6 +161,8 @@ def perfiles_disponibles() -> list[Perfil]:
     if _alpaca_disponible(cfg):
         perfiles.append(Perfil(
             id="alpaca_paper",
+            datos_nombre="Alpaca",
+            modo_texto="PAPER",
             broker_nombre="Alpaca",
             cuenta_texto="PAPER (simulado)   -   SIN DINERO REAL",
             es_live=False,
@@ -162,6 +181,8 @@ def perfiles_disponibles() -> list[Perfil]:
     if _alpaca_disponible(cfg) and hay_datos_tradier:
         perfiles.append(Perfil(
             id="alpaca_paper_datos_tradier",
+            datos_nombre="Tradier",
+            modo_texto="PAPER",
             broker_nombre="Alpaca",
             cuenta_texto="PAPER (simulado)   -   datos de Tradier (NBBO real)",
             es_live=False,
@@ -181,6 +202,8 @@ def perfiles_disponibles() -> list[Perfil]:
         if hay_datos_tradier:
             perfiles.append(Perfil(
                 id="alpaca_live_datos_tradier",
+                datos_nombre="Tradier",
+                modo_texto="LIVE",
                 broker_nombre="Alpaca",
                 cuenta_texto="LIVE - DINERO REAL   -   datos de Tradier (NBBO real)",
                 es_live=True,
@@ -193,6 +216,8 @@ def perfiles_disponibles() -> list[Perfil]:
             ))
         perfiles.append(Perfil(
             id="alpaca_live",
+            datos_nombre="Alpaca",
+            modo_texto="LIVE",
             broker_nombre="Alpaca",
             cuenta_texto="LIVE - DINERO REAL   -   datos propios de Alpaca",
             es_live=True,
@@ -212,6 +237,8 @@ def perfiles_disponibles() -> list[Perfil]:
         if hay_datos_tradier:
             perfiles.append(Perfil(
                 id="tasty_sandbox_datos_tradier",
+                datos_nombre="Tradier",
+                modo_texto="SANDBOX",
                 broker_nombre="Tastytrade",
                 cuenta_texto="SANDBOX (simulado)   -   datos de Tradier (NBBO real)",
                 es_live=False,
@@ -223,6 +250,8 @@ def perfiles_disponibles() -> list[Perfil]:
             ))
         perfiles.append(Perfil(
             id="tasty_sandbox",
+            datos_nombre="(sin precios)",
+            modo_texto="SANDBOX",
             broker_nombre="Tastytrade",
             cuenta_texto="SANDBOX (simulado)   -   SIN precios (solo ordenes)",
             es_live=False,
@@ -236,6 +265,8 @@ def perfiles_disponibles() -> list[Perfil]:
         if hay_datos_tradier:
             perfiles.append(Perfil(
                 id="tasty_live_datos_tradier",
+                datos_nombre="Tradier",
+                modo_texto="LIVE",
                 broker_nombre="Tastytrade",
                 cuenta_texto="LIVE - DINERO REAL   -   datos de Tradier (NBBO real)",
                 es_live=True,
@@ -247,6 +278,8 @@ def perfiles_disponibles() -> list[Perfil]:
             ))
         perfiles.append(Perfil(
             id="tasty_live",
+            datos_nombre="Tastytrade",
+            modo_texto="LIVE",
             broker_nombre="Tastytrade",
             cuenta_texto="LIVE - DINERO REAL   -   datos propios de Tastytrade",
             es_live=True,
