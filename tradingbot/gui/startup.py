@@ -76,7 +76,8 @@ QComboBox QAbstractItemView {
     selection-background-color: #35507a; outline: none;
 }
 
-/* tarjetas de cuenta: paper (verde) y live (rojo).
+/* Tarjetas de cuenta. Los colores son los MISMOS del banner de la app abierta:
+   NARANJA #E8820C = paper (simulado), VERDE #1e7d34 = live (dinero real).
    OJO: el estilo base tiene que nombrar a las DOS. Si solo se nombra #tarjeta, la
    de live sin marcar se queda sin estilo y Qt la pinta con el look por defecto
    (fondo BLANCO en medio de una ventana oscura). */
@@ -86,18 +87,18 @@ QComboBox QAbstractItemView {
 }
 #tarjeta:hover, #tarjetaLive:hover { border-color: #4a5058; }
 #tarjeta:checked {
-    background: #1c3a28; border: 1px solid #25c65c; color: #7ee59f; font-weight: bold;
+    background: #E8820C; border: 1px solid #E8820C; color: #ffffff; font-weight: bold;
 }
 #tarjetaLive:checked {
-    background: #3a1d22; border: 1px solid #e03e4e; color: #ff8f9a; font-weight: bold;
+    background: #1e7d34; border: 1px solid #1e7d34; color: #ffffff; font-weight: bold;
 }
 
 #avisoLive {
-    background: #3a1d22; border: 1px solid #b52b39; border-radius: 8px;
-    color: #ffb3ba; padding: 9px; font-size: 12px;
+    background: #1e7d34; border: 1px solid #1e7d34; border-radius: 8px;
+    color: #ffffff; padding: 9px; font-size: 12px;
 }
 QLineEdit {
-    background: #2a2e34; color: #e8eaed; border: 1px solid #b52b39;
+    background: #2a2e34; color: #e8eaed; border: 1px solid #1e7d34;
     border-radius: 6px; padding: 7px 10px; font-size: 13px;
 }
 
@@ -106,13 +107,18 @@ QLineEdit {
     border-radius: 7px; padding: 9px 18px; font-size: 13px;
 }
 #cancelar:hover { background: #2a2e34; color: #e8eaed; }
-#conectar {
-    background: #1f8a45; color: white; border: none; border-radius: 7px;
+/* El boton acompania el color de la cuenta elegida (igual que el banner).
+   Igual que con las tarjetas: la regla base tiene que nombrar a los DOS. Si
+   #conectarLive solo trae 'background', se queda sin 'border: none' y Qt le dibuja
+   su marco con degrade encima -> el verde sale aclarado y no es el del banner. */
+#conectar, #conectarLive {
+    color: white; border: none; border-radius: 7px;
     padding: 9px 26px; font-size: 13px; font-weight: bold;
 }
-#conectar:hover { background: #28a353; }
-#conectarLive { background: #b52b39; }
-#conectarLive:hover { background: #d13443; }
+#conectar { background: #E8820C; }
+#conectar:hover { background: #ff9420; }
+#conectarLive { background: #1e7d34; }
+#conectarLive:hover { background: #259940; }
 """
 
 
@@ -213,24 +219,15 @@ class StartupDialog(QDialog):
 
     # ---------- piezas ----------
     def _cabecera(self) -> QFrame:
-        try:
-            from ..registro import version_app
-            version = version_app()
-        except Exception:  # noqa: BLE001
-            version = ""
         cab = QFrame()
         cab.setObjectName("cabecera")
         cab.setFixedHeight(46)
         h = QHBoxLayout(cab)
         h.setContentsMargins(16, 0, 8, 0)
         h.setSpacing(8)
-        t = QLabel("Bot de trading")
+        t = QLabel("Autotrading App")
         t.setObjectName("titulo")
         h.addWidget(t)
-        if version:
-            v = QLabel(str(version).split()[-1][:12])
-            v.setObjectName("version")
-            h.addWidget(v)
         h.addStretch()
         x = QToolButton()
         x.setObjectName("cerrar")
