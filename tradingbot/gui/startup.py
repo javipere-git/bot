@@ -228,6 +228,20 @@ class StartupDialog(QDialog):
         t = QLabel("Autotrading App")
         t.setObjectName("titulo")
         h.addWidget(t)
+        # Version del codigo que esta corriendo (rama + identificador del commit).
+        # Sirve para saber, mirando una captura o un registro de OTRA PC, si tenia
+        # las ultimas correcciones o una version vieja. Lleva la "v." adelante para
+        # que se entienda que es eso y no un dato de la cuenta.
+        version = self._version_corta()
+        if version:
+            v = QLabel(f"v. {version}")
+            v.setObjectName("version")
+            v.setToolTip(
+                "Version del codigo que estas corriendo.\n"
+                "Si algo falla, este dato dice si la PC tiene las ultimas "
+                "correcciones o quedo con una version vieja."
+            )
+            h.addWidget(v)
         h.addStretch()
         x = QToolButton()
         x.setObjectName("cerrar")
@@ -238,6 +252,17 @@ class StartupDialog(QDialog):
         h.addWidget(x)
         self._cab = cab
         return cab
+
+    @staticmethod
+    def _version_corta() -> str:
+        """El identificador del commit. version_app() devuelve 'rama commit'
+        (ej. 'main 52d238c'); en la cabecera alcanza con el commit."""
+        try:
+            from ..registro import version_app
+            partes = str(version_app() or "").split()
+        except Exception:  # noqa: BLE001
+            return ""
+        return partes[-1][:12] if partes else ""
 
     @staticmethod
     def _etiqueta(texto: str) -> QLabel:
