@@ -5,6 +5,12 @@ No toca dinero real: usa la cuenta de sandbox de tastytrade (se reinicia cada 24
 Deja todo limpio al terminar (cancela lo que haya mandado).
 
     python examples/verificar_tastytrade.py
+
+Con el MERCADO ABIERTO se puede probar ademas que las ordenes se ejecuten de
+verdad, que aparezca la posicion (larga y corta) y que el resultado realizado sea
+exacto. Eso manda ordenes que SE LLENAN en el sandbox:
+
+    python examples/verificar_tastytrade.py --con-mercado-abierto
 """
 from __future__ import annotations
 
@@ -16,7 +22,7 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from tradingbot.connectors.tastytrade import _ACCION, _EFECTO, TastytradeBroker  # noqa: E402
-from tradingbot.core.models import OrderRequest, OrderType, Side  # noqa: E402
+from tradingbot.core.models import OrderRequest, OrderStatus, OrderType, Side  # noqa: E402
 
 
 def main() -> int:
@@ -90,10 +96,14 @@ def main() -> int:
             chequear("cancel_order", lambda: (b.cancel_order(m.id), "cancelada")[1])
             time.sleep(1)
 
-    print("\n=== VENTA EN CORTO (Sell to Open) ===")
-    s = chequear("place_order sell_short 5 AAPL @ 5.00",
+    # OJO con el precio: con el mercado ABIERTO, una VENTA por DEBAJO del mercado es
+    # ejecutable y se llena al instante (paso: una venta a 5.00 con AAPL en 307 dejo
+    # un corto abierto). Para que la orden quede QUIETA y se pueda cancelar, la venta
+    # tiene que ir MUY POR ENCIMA del mercado (y la compra, muy por debajo).
+    print("\n=== VENTA EN CORTO (Sell to Open, precio alto: no se ejecuta) ===")
+    s = chequear("place_order sell_short 5 AAPL @ 9999",
                  lambda: b.place_order(
-                     OrderRequest("AAPL", Side.SELL_SHORT, 5, 5.00, OrderType.LIMIT)))
+                     OrderRequest("AAPL", Side.SELL_SHORT, 5, 9999.00, OrderType.LIMIT)))
     if s is not None:
         vuelta = b.get_order(s.id)
         bien = vuelta.side == Side.SELL_SHORT
@@ -102,6 +112,80 @@ def main() -> int:
         ok += bien
         fallos += (not bien)
         chequear("cancel_order (corto)", lambda: (b.cancel_order(s.id), "cancelada")[1])
+
+    # Con el mercado ABIERTO se puede probar lo que de verdad importa: que las
+    # ordenes se EJECUTEN, que aparezca la posicion y que el resultado realizado
+    # sea exacto. El sandbox usa PRECIOS REALES (verificado el 10/08/2026), asi que
+    # una limite lejos del mercado no se llena: para forzar ejecucion, a mercado.
+    if "--con-mercado-abierto" in sys.argv:
+        print("\n=== EJECUCION REAL (mercado abierto) ===")
+        cuenta = b.get_account_id()
+
+        def efectivo() -> float:
+            d = b._pedir("GET", f"/accounts/{cuenta}/balances")["data"]
+            return float(d.get("cash-balance") or 0.0)
+
+        def esperar(oid, seg=5.0):
+            time.sleep(seg)
+            return b.get_order(oid)
+
+        cash0, pl0 = efectivo(), b.get_day_pnl().realizado
+        compra = esperar(b.place_order(
+            OrderRequest("AAPL", Side.BUY, 10, 0.0, OrderType.MARKET)).id)
+        lleno = compra.status == OrderStatus.FILLED
+        print(f"  {'OK ' if lleno else '***'} la compra se EJECUTA "
+              f"(estado {compra.status.value} @ {compra.avg_fill_price})")
+        ok += lleno
+        fallos += (not lleno)
+
+        pos = b.get_positions()
+        bien = len(pos) == 1 and pos[0].quantity == 10 and pos[0].is_long
+        print(f"  {'OK ' if bien else '***'} aparece la POSICION larga: "
+              f"{[(p.symbol, p.quantity, p.avg_price) for p in pos]}")
+        ok += bien
+        fallos += (not bien)
+
+        # con la posicion ABIERTA el realizado casi no se mueve (no cerramos nada).
+        # Este es el chequeo que descubrio el bug: antes saltaba al costo de la compra.
+        abierto = b.get_day_pnl().realizado
+        sano = abs(abierto - pl0) < 5.0
+        print(f"  {'OK ' if sano else '***'} el realizado NO salta con la posicion "
+              f"abierta ({abierto - pl0:+.4f}; el costo fue ~3070)")
+        ok += sano
+        fallos += (not sano)
+
+        venta = esperar(b.place_order(
+            OrderRequest("AAPL", Side.SELL, 10, 0.0, OrderType.MARKET)).id)
+        cerro = venta.status == OrderStatus.FILLED and not b.get_positions()
+        print(f"  {'OK ' if cerro else '***'} la venta CIERRA la posicion "
+              f"(@ {venta.avg_fill_price})")
+        ok += cerro
+        fallos += (not cerro)
+
+        # el realizado tiene que moverse EXACTAMENTE lo que se movio el efectivo
+        cash1, pl1 = efectivo(), b.get_day_pnl().realizado
+        exacto = abs((cash1 - cash0) - (pl1 - pl0)) < 0.001
+        print(f"  {'OK ' if exacto else '***'} el realizado coincide con el efectivo: "
+              f"informa {pl1 - pl0:+.4f} / efectivo {cash1 - cash0:+.4f}")
+        ok += exacto
+        fallos += (not exacto)
+
+        # corto ejecutado de verdad
+        corto = esperar(b.place_order(
+            OrderRequest("AAPL", Side.SELL_SHORT, 10, 0.0, OrderType.MARKET)).id)
+        pos = b.get_positions()
+        en_corto = bool(pos) and pos[0].quantity == -10 and pos[0].is_short
+        print(f"  {'OK ' if en_corto else '***'} el CORTO deja posicion negativa: "
+              f"{[(p.symbol, p.quantity) for p in pos]}")
+        ok += en_corto
+        fallos += (not en_corto)
+
+        cubrir = esperar(b.place_order(
+            OrderRequest("AAPL", Side.BUY_TO_COVER, 10, 0.0, OrderType.MARKET)).id)
+        plano = cubrir.status == OrderStatus.FILLED and not b.get_positions()
+        print(f"  {'OK ' if plano else '***'} el BUY TO COVER cierra el corto")
+        ok += plano
+        fallos += (not plano)
 
     print("\n=== COTIZACION (en sandbox NO hay: se espera un aviso claro) ===")
     try:

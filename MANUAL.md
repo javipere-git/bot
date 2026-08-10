@@ -766,6 +766,55 @@ que hace que la app de un companiero se sienta aun mas rapida.
 
 ---
 
+## 4e. Tastytrade: lo que hay que saber (10/08/2026)
+
+Tercer broker. Se conecta con OAuth2 "grant personal" (client secret + refresh
+token en `credentials.ini`); la app saca sola los tokens, que duran 15 minutos.
+
+**Diferencias con los otros dos, verificadas en vivo contra el sandbox:**
+
+| | Tradier | Alpaca | **Tastytrade** |
+|---|---|---|---|
+| Al MOVER una orden | conserva el id | crea id nuevo | **crea id nuevo** |
+| Distingue venta de venta en corto | si | no | **si** |
+| Horario extendido | duracion pre/post | campo aparte | **time-in-force "Ext"** |
+
+**Restriccion propia de Tasty**: NO acepta una compra y una venta abiertas a la vez
+en el MISMO simbolo ("Cannot buy and sell against the same symbol"). Si podes tener
+varias del mismo lado, y compra en un simbolo + venta en otro. El bot no se ve
+afectado (cancela la entrada antes de trabajar la salida), pero en el ladder no vas
+a poder dejar una compra y una venta puestas juntas como en los otros brokers.
+
+**Cerca del cierre**: Tasty rechaza las ordenes DAY con "Day orders will be accepted
+after 3:15pm CT" (16:15 hora de NY). En esa ventana, el `Ext` del sandbox respondia
+error 502 del servidor.
+
+**El sandbox usa PRECIOS REALES.** La regla vieja de su documentacion ("las limites
+por debajo de $3 se llenan al instante, las de mercado a $1") ya NO se cumple: una
+orden a mercado de AAPL se lleno a 307.28, el precio de verdad. Consecuencia al
+probar: una VENTA por debajo del mercado se ejecuta al toque.
+
+**El resultado del dia hay que calcularlo**: Tasty no lo informa. No existen los
+campos `realized-day-gain` / `unrealized-day-gain` de otros brokers,
+`net-liquidating-value` queda clavado, y `intraday-equities-cash-amount` con una
+posicion abierta muestra el COSTO DE LA COMPRA, no la ganancia. El conector usa:
+
+    efectivo + suma(precio_promedio x cantidad)
+
+Ese numero no se mueve con el precio (lo no realizado no lo toca); solo cambia
+cuando CERRAS algo o por comisiones. Se ancla en la primera lectura, asi que informa
+**el realizado desde que la app se conecto** (lo operado antes con otra herramienta
+no entra). Verificado: informo -1.2370 y el efectivo se movio exactamente -1.2370.
+
+**Cotizaciones**: el REST de precios de Tasty existe SOLO en produccion y para
+cuentas CON FONDOS (en sandbox devuelve 502). Por eso el perfil recomendado del
+sandbox es el HIBRIDO: ordenes por Tastytrade y precios por Tradier.
+
+Todo esto queda verificado en `examples/verificar_tastytrade.py` (agregale
+`--con-mercado-abierto` para probar tambien ejecuciones, posiciones y el resultado).
+
+---
+
 ## 5. Indicador de conexion (encabezado)
 
 Al lado del banner PAPER/LIVE: **"streaming: conectado / intentando conectar... / en

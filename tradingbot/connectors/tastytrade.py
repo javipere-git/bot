@@ -151,6 +151,8 @@ class TastytradeBroker(Broker):
         self._token = ""
         self._token_vence = 0.0
         self._token_lock = threading.Lock()
+        # referencia para medir el resultado realizado (ver get_day_pnl)
+        self._ancla_realizado: float | None = None
         self._account = (account_number or "").strip()
         if not self._account:
             self._account = self._resolver_cuenta()
@@ -388,21 +390,49 @@ class TastytradeBroker(Broker):
         return _f(valor) if valor is not None else None
 
     def get_day_pnl(self) -> DayPnL | None:
-        """Resultado del dia. Tasty lo informa en balances:
-        'realized-day-gain' (con su efecto Gain/Loss) y el no realizado sale de las
-        posiciones abiertas."""
+        """Resultado REALIZADO desde que la app se conecto.
+
+        OJO, esto tiene truco y conviene entenderlo (verificado en vivo el
+        10/08/2026 contra el sandbox):
+
+        Tasty NO informa el resultado del dia en balances. No existen los campos
+        'realized-day-gain' / 'unrealized-day-gain' de otros brokers, y
+        'net-liquidating-value' en el sandbox queda clavado en el valor inicial.
+        El campo 'intraday-equities-cash-amount' TAMPOCO sirve: mientras hay una
+        posicion abierta muestra el COSTO DE LA COMPRA (medido: 3073.116 con 10
+        AAPL compradas), no el resultado.
+
+        Lo que si es solido es el EFECTIVO mas el costo de lo que tengas abierto:
+
+            equivalente = efectivo + suma(precio_promedio * cantidad)
+
+        Ese numero no se mueve por como cambie el precio (lo no realizado no lo
+        toca); solo baja o sube cuando CERRAS algo (o por comisiones). Su
+        VARIACION entre dos momentos es exactamente el resultado realizado en ese
+        lapso, que es lo que necesita el reporte por pasada.
+
+        Como no sabemos cuanto habia al abrir la rueda, se ancla en la primera
+        lectura: lo que se informa es el realizado DESDE QUE LA APP SE CONECTO
+        (si operaste antes con otra herramienta, eso no entra).
+
+        Lo no realizado necesita cotizaciones; si el broker de datos no las da
+        (sandbox), se informa 0 y la pantalla lo completa por su cuenta.
+        """
         try:
             js = self._pedir("GET", f"/accounts/{self._account}/balances")
         except Exception:  # noqa: BLE001
             return None
         d = js.get("data", {})
-        realizado = _f(d.get("realized-day-gain"))
-        if str(d.get("realized-day-gain-effect", "")).lower() == "loss":
-            realizado = -realizado
-        no_realizado = _f(d.get("unrealized-day-gain"))
-        if str(d.get("unrealized-day-gain-effect", "")).lower() == "loss":
-            no_realizado = -no_realizado
-        return DayPnL(realizado=realizado, no_realizado=no_realizado)
+        efectivo = _f(d.get("cash-balance"))
+        try:
+            costo_abierto = sum(p.avg_price * p.quantity for p in self.get_positions())
+        except Exception:  # noqa: BLE001
+            costo_abierto = 0.0
+        equivalente = efectivo + costo_abierto
+        if self._ancla_realizado is None:
+            self._ancla_realizado = equivalente
+        return DayPnL(realizado=round(equivalente - self._ancla_realizado, 4),
+                      no_realizado=0.0)
 
     def distingue_venta_en_corto(self) -> bool:
         """True: Tasty tiene 'Sell to Close' y 'Sell to Open' separados, asi que el
