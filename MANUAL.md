@@ -810,6 +810,29 @@ no entra). Verificado: informo -1.2370 y el efectivo se movio exactamente -1.237
 cuentas CON FONDOS (en sandbox devuelve 502). Por eso el perfil recomendado del
 sandbox es el HIBRIDO: ordenes por Tastytrade y precios por Tradier.
 
+**Streaming (DXLink)**: en produccion, Tastytrade tiene streaming propio y ya esta
+cableado (`connectors/tastytrade_stream.py`), asi que el perfil "datos propios de
+Tastytrade" tiene precios en vivo, Time & Sales, y los filtros de movimiento del
+bot funcionan.
+
+**>>> EL STREAMING DE TASTY TRAE ODD LOTS <<<** (medido el 11/08/2026, mercado
+abierto). Es el UNICO de nuestros feeds que los muestra:
+
+| Fuente | Tamanos |
+|---|---|
+| REST de Tastytrade | solo lotes redondos (multiplos de 40 / 100) |
+| REST y streaming de Tradier | solo lotes redondos |
+| Alpaca SIP | solo lotes redondos |
+| **Streaming de Tastytrade (DXLink)** | **incluye ODD LOTS** (se vieron 1, 9, 19, 29, 81...) |
+
+Comprobado que los tamanos estan en ACCIONES y no en lotes: si fueran lotes,
+darian 10-17 veces lo que informa el REST en el mismo instante, lo que es
+imposible; en acciones dan el mismo orden de magnitud.
+
+Consecuencia practica: en el ladder con Tasty vas a ver niveles y tamanos que con
+Tradier o Alpaca NO se ven (por ejemplo un ask de 9 acciones a un precio mejor que
+el de los lotes redondos). No es un error: es informacion de mas.
+
 Todo esto queda verificado en `examples/verificar_tastytrade.py` (agregale
 `--con-mercado-abierto` para probar tambien ejecuciones, posiciones y el resultado).
 

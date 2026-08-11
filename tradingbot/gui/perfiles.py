@@ -19,6 +19,7 @@ from ..connectors.tradier_account_stream import TradierAccountStream
 from ..connectors.hibrido import BrokerHibrido
 from ..connectors.tradier import TradierBroker
 from ..connectors.tastytrade import TastytradeBroker
+from ..connectors.tastytrade_stream import TastytradeMarketStream
 
 
 @dataclass
@@ -284,6 +285,14 @@ def perfiles_disponibles() -> list[Perfil]:
             cuenta_texto="LIVE - DINERO REAL   -   datos propios de Tastytrade",
             es_live=True,
             _crear_broker=lambda: TastytradeBroker.from_credentials(environment="production"),
+            # Streaming propio por DXLink: precios en vivo para el ladder y el Time &
+            # Sales, y datos para los filtros de movimiento del bot (sin streaming
+            # esos filtros no tienen que medir y dejarian pasar todo).
+            # OJO, dato medido: este feed trae ODD LOTS (tamanos que no son multiplos
+            # del lote redondo); el REST de Tasty y el de Tradier, no.
+            _crear_stream=lambda: StreamWorker(
+                TastytradeMarketStream.from_credentials(environment="production")
+            ),
         ))
 
     return perfiles
