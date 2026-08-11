@@ -711,7 +711,10 @@ class MainWindow(QMainWindow):
         self._market_worker.closed_orders.connect(self._on_closed_orders)
         self._market_worker.day_pnl.connect(self.monitor.set_day_pnl)
         self._market_worker.day_pnl.connect(self._recordar_realizado)
-        self._market_worker.quote.connect(self.ladder.actualizar_quote)
+        # el sondeo por REST es el RESPALDO del ladder (para simbolos poco liquidos,
+        # donde el streaming se queda mudo). No pisa al streaming si esta despachando:
+        # el REST redondea los tamanos al lote y borraria los odd lots de Tastytrade.
+        self._market_worker.quote.connect(self.ladder.actualizar_quote_rest)
         self._market_worker.orders.connect(self.ladder.set_orders)
         self._market_worker.positions.connect(self.ladder.set_positions)
         self._market_worker.error.connect(self.control.append_log)

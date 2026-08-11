@@ -833,6 +833,15 @@ Consecuencia practica: en el ladder con Tasty vas a ver niveles y tamanos que co
 Tradier o Alpaca NO se ven (por ejemplo un ask de 9 acciones a un precio mejor que
 el de los lotes redondos). No es un error: es informacion de mas.
 
+**El streaming le gana al sondeo por REST (12/08/2026)**. El ladder toma precios de
+DOS lados: el streaming y, como respaldo, el sondeo del monitoreo por REST. Ese
+respaldo hace falta -en acciones poco liquidas el streaming solo manda datos cuando
+el precio CAMBIA, y sin el la escalera queda vacia minutos-, pero informa los
+tamanos REDONDEADOS AL LOTE. Como pisaba al streaming, los odd lots de Tasty
+aparecian un momento y se iban en el siguiente sondeo. Ahora el REST se DESCARTA
+mientras el streaming haya mandado algo hace menos de 5 segundos. Medido en vivo:
+145 muestras con odd lot contra 17 redondas (antes se perdian cada 4 segundos).
+
 Todo esto queda verificado en `examples/verificar_tastytrade.py` (agregale
 `--con-mercado-abierto` para probar tambien ejecuciones, posiciones y el resultado).
 

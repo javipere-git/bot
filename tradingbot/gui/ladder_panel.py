@@ -126,6 +126,9 @@ class LadderPanel(QWidget):
     AYUDA = ("Click en Bid = COMPRA / click en Ask = VENTA.  "
              "Click en tu orden = cancelar; arrastrala para moverla.")
     STALE_SECS = 8    # segundos sin quote nuevo -> aviso "datos viejos"
+    # Mientras el streaming haya mandado algo hace menos de esto, las lecturas por
+    # REST se descartan (son el respaldo, y traen los tamanos redondeados al lote).
+    RESPALDO_SEGS = 5.0
 
     # Pedidos al hilo que habla con el broker (ver ladder_worker.py). Van por
     # conexion EN COLA: el click vuelve al instante y las llamadas salen en orden.
@@ -153,6 +156,7 @@ class LadderPanel(QWidget):
         self._pos_qty = 0       # cantidad de la posicion (+largo / -corto)
         self._last_nbbo = None  # (bid_lvl, ask_lvl, paso) del ultimo centrado
         self._pendiente = False # hay datos nuevos por repintar (repintado throttleado)
+        self._ultimo_stream = 0.0  # cuando llego la ultima cotizacion del STREAMING
         self._ancla = None      # (top_lvl, bot_lvl, paso) fijado mientras esta congelada
 
         lay = QVBoxLayout(self)
@@ -407,12 +411,30 @@ class LadderPanel(QWidget):
 
     # ---------- datos en vivo ----------
     def actualizar_quote(self, symbol, bid, ask, bidsize, asksize) -> None:
+        """Cotizacion del STREAMING. Es la buena: la mas fresca y la mas detallada
+        (en Tastytrade, ademas, es la unica que trae los ODD LOTS)."""
         if symbol != self._symbol:
             return
         if bid <= 0 or ask <= 0 or ask < bid:
             return
+        self._ultimo_stream = time.time()
         self._last = (bid, ask, bidsize, asksize)
         self._pendiente = True  # se repinta en el proximo tick del timer (throttleado)
+
+    def actualizar_quote_rest(self, symbol, bid, ask, bidsize, asksize) -> None:
+        """Cotizacion leida por REST (el sondeo del monitoreo). Es solo un RESPALDO:
+        sirve para las acciones poco liquidas, donde el streaming se queda mudo
+        minutos porque solo manda datos cuando el precio cambia.
+
+        Si el streaming esta despachando, esta se DESCARTA. Por que: el REST informa
+        tamanos redondeados al lote (multiplos de 40 o 100) y el streaming de
+        Tastytrade trae los ODD LOTS de verdad. Sin este filtro, cada sondeo pisaba
+        los odd lots y por eso aparecian un momento y despues se iban.
+        """
+        if time.time() - getattr(self, "_ultimo_stream", 0.0) < self.RESPALDO_SEGS:
+            return                      # el streaming manda: no lo pisamos
+        self.actualizar_quote(symbol, bid, ask, bidsize, asksize)
+        self._ultimo_stream = 0.0       # vino del respaldo: no cuenta como streaming
 
     def _repintar(self) -> None:
         """Repinta la escalera si hay datos nuevos. Lo llama el timer cada 150 ms."""
