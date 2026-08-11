@@ -82,6 +82,7 @@ class BotEngine:
         log: Callable[[str], None] | None = None,
         on_manual: Callable[[str], None] | None = None,
         observador=None,
+        on_pausa: Callable[[bool], None] | None = None,
     ) -> None:
         self._broker = broker
         self._cfg = config
@@ -90,6 +91,8 @@ class BotEngine:
         # aviso de "esta posicion queda en tus manos" (la pantalla lo usa para
         # cargar el simbolo en el ladder sola y, si fue el guardia, para la alarma)
         self._on_manual = on_manual or (lambda s, g: None)
+        # aviso de "quede pausado / segui": la pantalla prende y apaga los botones
+        self._on_pausa = on_pausa or (lambda p: None)
         self._stopped = False
         self._resume = threading.Event()
         self._resume.set()  # set = corriendo; clear = en pausa
@@ -186,11 +189,26 @@ class BotEngine:
 
     def pause(self) -> None:
         self._resume.clear()
+        self._avisar_pausa(True)
 
     def resume(self) -> None:
         self._resume.set()
+        self._avisar_pausa(False)
 
-    def _vigilar_en_manual(self, sym: str, pos: Position) -> None:
+    def _avisar_pausa(self, pausado: bool) -> None:
+        """Le avisa a la pantalla que el bot quedo pausado (o siguio).
+
+        Importante: el motor se pausa SOLO en varios casos (una posicion quedo en
+        manual, se cerro una con 'pausar tras operar', ya habia posicion abierta).
+        Sin este aviso la pantalla no se entera y los botones quedan mintiendo.
+        Si el aviso falla, el motor sigue igual: nunca frena por esto."""
+        try:
+            self._on_pausa(bool(pausado))
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _vigilar_en_manual(self, sym: str, pos: Position,
+                           ya_alarmo: bool = False) -> None:
         """Espera a que cierres la posicion a mano y aprietes Reanudar, PERO mientras
         espera el guardia sigue vigilando: si el precio se corre en contra, suena la
         alerta igual, aunque ya este en manual.
@@ -200,12 +218,26 @@ class BotEngine:
 
         Nunca opera: SOLO avisa. Aca no hay cierre automatico configurado, asi que el
         motor no manda ninguna orden por su cuenta; la decision sigue siendo tuya.
+
+        `ya_alarmo=True` cuando la posicion llega aca JUSTO PORQUE el guardia acaba de
+        dispararse (paso a manual). En ese caso la alarma ya sono, asi que no se vuelve
+        a avisar: si no, con el precio todavia corrido el chequeo de aca disparaba una
+        SEGUNDA alarma al instante y salian DOS carteles. Pasaba solo con el cierre
+        automatico activado, que es el unico camino donde el guardia dispara antes de
+        llegar aca.
         """
         g = self._cfg.guard
         baseline = self._baseline_vigilancia
         vigila = g is not None and g.enabled and baseline is not None
         if not vigila:
             self._wait_if_paused()          # sin guardia: espera de siempre
+            return
+        if ya_alarmo:
+            self._log(
+                f"{sym}: en manual por el guardia (la alarma ya sono). "
+                f"Cerra la posicion y apreta Reanudar."
+            )
+            self._wait_if_paused()
             return
 
         self._log(
@@ -359,7 +391,11 @@ class BotEngine:
                         f"para seguir con el siguiente simbolo."
                     )
                     self.pause()
-                    self._vigilar_en_manual(sym, pos)
+                    # si llegamos aca POR el guardia, _announce ya hizo sonar la
+                    # alarma: no volver a avisar (si no, salen dos carteles)
+                    self._vigilar_en_manual(
+                        sym, pos, ya_alarmo=(outcome == Outcome.MANUAL_GUARD)
+                    )
                     if self._stopped:
                         return Outcome.STOPPED
                     if self._abort:

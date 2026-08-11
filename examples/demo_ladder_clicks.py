@@ -47,6 +47,31 @@ def _fila_de_precio(ladder, precio):
     return None
 
 
+def _esperar(condicion, segundos: float = 5.0) -> bool:
+    """Espera a que se cumpla algo, atendiendo los eventos de Qt mientras tanto.
+
+    Desde que el ladder manda las ordenes en un hilo propio (para no congelar la
+    pantalla), el click vuelve al instante y la orden llega al broker un momento
+    despues: no se puede mirar el resultado en la misma linea del click.
+    Devuelve True si se cumplio, False si se acabo el tiempo.
+    """
+    import time
+    app = QApplication.instance()
+    fin = time.monotonic() + segundos
+    while time.monotonic() < fin:
+        if app is not None:
+            app.processEvents()
+        if condicion():
+            return True
+        time.sleep(0.02)
+    return False
+
+
+def _quieto(condicion, segundos: float = 1.0) -> bool:
+    """Para lo que NO tiene que pasar: espera un rato y confirma que sigue igual."""
+    return not _esperar(condicion, segundos)
+
+
 def main() -> None:
     app = QApplication(sys.argv)
     broker = FakeBroker()
@@ -61,6 +86,7 @@ def main() -> None:
     print("1) Click en BID = manda COMPRA")
     fila = _fila_de_precio(ladder, 99.95)
     ladder._click_celda(fila, C_BID)
+    _esperar(lambda: len(broker.get_open_orders()) == 1)
     abiertas = broker.get_open_orders()
     ok1 = len(abiertas) == 1 and abiertas[0].side == Side.BUY and abiertas[0].price == 99.95
     print(f"   ordenes: {len(abiertas)}"
@@ -70,6 +96,7 @@ def main() -> None:
     print("2) Click en ASK = manda VENTA")
     fila = _fila_de_precio(ladder, 100.20)
     ladder._click_celda(fila, C_ASK)
+    _esperar(lambda: any(o.side == Side.SELL for o in broker.get_open_orders()))
     ventas = [o for o in broker.get_open_orders() if o.side == Side.SELL]
     ok2 = len(ventas) == 1 and ventas[0].price == 100.20
     print(f"   ordenes de venta: {len(ventas)}"
@@ -81,8 +108,9 @@ def main() -> None:
     fila = _fila_de_precio(ladder, 99.90)
     ladder._click_celda(fila, C_BUY)
     ladder._click_celda(fila, C_SELL)
+    # no tiene que aparecer ninguna: se espera un rato para estar seguros
+    ok3 = _quieto(lambda: len(broker.get_open_orders()) != antes)
     despues = len(broker.get_open_orders())
-    ok3 = antes == despues
     print(f"   ordenes antes {antes}, despues {despues} (esperado iguales)")
     print(f"   -> {'OK: esas columnas solo cancelan' if ok3 else '*** FALLO'}\n")
 
@@ -91,6 +119,7 @@ def main() -> None:
     ladder._repintar()
     fila = _fila_de_precio(ladder, 99.95)
     ladder._click_celda(fila, C_BUY)          # ahi esta dibujada la compra
+    _esperar(lambda: all(o.price != 99.95 for o in broker.get_open_orders()))
     quedan = broker.get_open_orders()
     ok4 = all(o.price != 99.95 for o in quedan)
     print(f"   quedan {len(quedan)} ordenes; la de 99.95 se cancelo: {ok4}")
@@ -134,12 +163,14 @@ def main() -> None:
     l3.chk_ext.setChecked(True)               # orden de horario extendido
     fila = _fila_de_precio(l3, 99.95)
     l3._click_celda(fila, C_BID)
+    _esperar(lambda: len(espia.get_open_orders()) >= 1)
     orden = espia.get_open_orders()[0]
     orden.duration = Duration.POST            # como la reporta el broker en post-market
     l3.set_orders(espia.get_open_orders())
     l3._repintar()
     destino = _fila_de_precio(l3, 99.90)
     l3._mover_orden([orden.id], destino)
+    _esperar(lambda: bool(espia.duraciones))
     ok6 = espia.duraciones == [Duration.POST]
     print(f"   la orden es POST; al moverla se mando duracion: {espia.duraciones}")
     print(f"   -> {'OK: respeta la duracion (antes mandaba day y fallaba)' if ok6 else '*** FALLO'}\n")

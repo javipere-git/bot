@@ -305,6 +305,7 @@ class MainWindow(QMainWindow):
         self._runner.moveToThread(self._thread)
         self._runner.log.connect(self.control.append_log)
         self._runner.manual.connect(self._on_manual)
+        self._runner.pausado.connect(self._on_pausado)
         self._runner.finished.connect(self._on_finished)
         self._thread.started.connect(self._runner.run)
         self._thread.start()
@@ -342,23 +343,39 @@ class MainWindow(QMainWindow):
             self._alarma_guardia(sym)
 
     def _alarma_guardia(self, sym: str) -> None:
-        """Alarma sostenida del guardia: suena repetida hasta que aceptes el cartel."""
+        """Alarma sostenida del guardia: suena repetida hasta que aceptes el cartel.
+
+        UN SOLO CARTEL A LA VEZ. El cartel es modal y, mientras esta abierto, Qt sigue
+        atendiendo avisos: si llegara un segundo disparo, se apilaria otro cartel
+        encima y habria que aceptar los dos para apagar la alarma. El motor ya no
+        avisa dos veces, pero esto lo deja garantizado venga de donde venga.
+        """
+        if getattr(self, "_alarma_abierta", False):
+            self.control.append_log(
+                f"Guardia: {sym} - la alarma ya esta sonando, no abro otro cartel."
+            )
+            return
+        self._alarma_abierta = True
         timer = QTimer(self)
         timer.setInterval(1200)
         timer.timeout.connect(sonar_alerta)
         timer.start()
-        QMessageBox.critical(
-            self,
-            "GUARDIA DISPARADO",
-            (
-                "GUARDIA DE MOVIMIENTO EN CONTRA DISPARADO\n\n"
-                f"{sym}: el precio se movio en contra y la posicion quedo ABIERTA.\n"
-                f"Ya cargue {sym} en el ladder para que la cierres a mano.\n\n"
-                "Al apretar Aceptar se apaga la alarma."
-            ),
-        )
-        timer.stop()
-        timer.deleteLater()
+        try:
+            QMessageBox.critical(
+                self,
+                "GUARDIA DISPARADO",
+                (
+                    "GUARDIA DE MOVIMIENTO EN CONTRA DISPARADO\n\n"
+                    f"{sym}: el precio se movio en contra y la posicion quedo ABIERTA.\n"
+                    f"Ya cargue {sym} en el ladder para que la cierres a mano.\n\n"
+                    "Al apretar Aceptar se apaga la alarma."
+                ),
+            )
+        finally:
+            # pase lo que pase, la alarma se apaga y se puede volver a avisar
+            timer.stop()
+            timer.deleteLater()
+            self._alarma_abierta = False
 
     def _on_finished(self, outcome: str) -> None:
         self.control.append_log(f"Bot finalizo: {outcome}")
@@ -645,11 +662,27 @@ class MainWindow(QMainWindow):
         if getattr(self, "_market_worker", None) is not None:
             self._market_worker.set_bot_escaneando(valor)
 
-    def _set_running(self, running: bool) -> None:
+    def _set_running(self, running: bool, pausado: bool = False) -> None:
+        """Prende y apaga los botones segun en que estado esta el bot:
+
+            DETENIDO  -> solo Iniciar
+            CORRIENDO -> Pausar y Detener
+            PAUSADO   -> Reanudar y Detener
+
+        Asi el boton que apretas siempre hace algo, y el que no corresponde no se
+        puede apretar (antes Reanudar quedaba activo con el bot ya corriendo).
+        """
+        self._pausado = bool(pausado) and bool(running)
         self.control.btn_iniciar.setEnabled(not running)
-        self.control.btn_pausar.setEnabled(running)
-        self.control.btn_reanudar.setEnabled(running)
+        self.control.btn_pausar.setEnabled(running and not self._pausado)
+        self.control.btn_reanudar.setEnabled(running and self._pausado)
         self.control.btn_detener.setEnabled(running)
+
+    def _on_pausado(self, pausado: bool) -> None:
+        """El motor avisa que se pauso o siguio (incluidas las pausas que se toma
+        solo: posicion en manual, 'pausar tras operar', ya habia posicion abierta)."""
+        if self._runner is not None:
+            self._set_running(True, pausado)
 
     # ---------- monitoreo en vivo (en hilo aparte) ----------
     def _arrancar_monitoreo(self) -> None:

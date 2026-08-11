@@ -67,7 +67,10 @@ class BrokerConCaida(FakeBroker):
         self._quotes[symbol] = q  # el simulador de llenados lee de aca
         return q
 
-    def modify_order(self, order_id, *, price=None, quantity=None):
+    # OJO con la firma: el motor manda tambien la DURACION que ya tiene la orden
+    # (se agrego al arreglar el rechazo de Tradier en horario extendido). Si este
+    # broker de mentira no la acepta, el motor cree que el broker fallo.
+    def modify_order(self, order_id, *, price=None, quantity=None, duration=None):
         if price is not None:
             self.reprecios.append(price)
         return super().modify_order(order_id, price=price, quantity=quantity)

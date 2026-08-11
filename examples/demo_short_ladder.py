@@ -50,6 +50,27 @@ def _fila(ladder, precio):
     return None
 
 
+def _ultima_orden(broker, antes: int, segundos: float = 5.0):
+    """Espera a que la orden LLEGUE al broker y la devuelve.
+
+    Desde que el ladder manda las ordenes en un hilo propio (para no congelar la
+    pantalla), el click vuelve al instante y la orden sale un momento despues. Por
+    eso no se puede mirar el broker en la misma linea del click: hay que esperarla.
+    Devuelve None si no llego (asi el demo falla con un mensaje claro y no revienta).
+    """
+    import time
+    app = QApplication.instance()
+    fin = time.monotonic() + segundos
+    while time.monotonic() < fin:
+        if app is not None:
+            app.processEvents()
+        ordenes = broker.get_open_orders()
+        if len(ordenes) > antes:
+            return ordenes[-1]
+        time.sleep(0.02)
+    return None
+
+
 def _armar(broker):
     l = LadderPanel(broker_provider=lambda: broker, log=lambda m: None)
     l.ed_symbol.setText("AAPL")
@@ -67,25 +88,29 @@ def main() -> None:
     b = BrokerTradier()
     b.set_quote("AAPL", bid=100.00, ask=100.10)
     l = _armar(b)
+    antes = len(b.get_open_orders())
     l._click_celda(_fila(l, 100.20), C_ASK)
-    o = b.get_open_orders()[-1]
-    ok1 = o.side == Side.SELL
-    print(f"   lado enviado: {o.side.value} (esperado sell)")
+    o = _ultima_orden(b, antes)
+    ok1 = o is not None and o.side == Side.SELL
+    print(f"   lado enviado: {o.side.value if o else 'NO LLEGO'} (esperado sell)")
     print(f"   -> {'OK' if ok1 else '*** FALLO'}\n")
 
     print("2) SS tildado -> la venta sale como 'sell_short'")
     l.chk_short.setChecked(True)
+    antes = len(b.get_open_orders())
     l._click_celda(_fila(l, 100.15), C_ASK)
-    o = b.get_open_orders()[-1]
-    ok2 = o.side == Side.SELL_SHORT
-    print(f"   lado enviado: {o.side.value} (esperado sell_short)")
+    o = _ultima_orden(b, antes)
+    ok2 = o is not None and o.side == Side.SELL_SHORT
+    print(f"   lado enviado: {o.side.value if o else 'NO LLEGO'} (esperado sell_short)")
     print(f"   -> {'OK' if ok2 else '*** FALLO'}\n")
 
     print("3) Las COMPRAS no cambian con el tilde")
+    antes = len(b.get_open_orders())
     l._click_celda(_fila(l, 99.90), C_BID)
-    o = b.get_open_orders()[-1]
-    ok3 = o.side == Side.BUY
-    print(f"   lado enviado: {o.side.value} (esperado buy, con SS tildado)")
+    o = _ultima_orden(b, antes)
+    ok3 = o is not None and o.side == Side.BUY
+    print(f"   lado enviado: {o.side.value if o else 'NO LLEGO'} "
+          f"(esperado buy, con SS tildado)")
     print(f"   -> {'OK' if ok3 else '*** FALLO'}\n")
 
     print("4) RED DE SEGURIDAD en un broker que no distingue (Alpaca)")
@@ -95,25 +120,26 @@ def main() -> None:
     la.set_positions([])                       # SIN posicion
     antes = len(a.get_open_orders())
     la._click_celda(_fila(la, 100.20), C_ASK)  # venta con SS apagado
-    sin_pos = len(a.get_open_orders()) == antes
+    # frenada = NO tiene que llegar ninguna (se espera un rato para estar seguros)
+    sin_pos = _ultima_orden(a, antes, segundos=1.0) is None
     print(f"   sin posicion, SS apagado -> venta frenada: {sin_pos}")
 
     la.set_positions([Position("AAPL", quantity=25, avg_price=99.0)])
     antes = len(a.get_open_orders())
     la._click_celda(_fila(la, 100.15), C_ASK)  # 10 de 25: entra
-    con_pos = len(a.get_open_orders()) > antes
+    con_pos = _ultima_orden(a, antes) is not None
     print(f"   con 25 en cartera, vendo 10 -> pasa: {con_pos}")
 
     la.spin_size.setValue(40)                  # 40 de 25: quedaria corto
     antes = len(a.get_open_orders())
     la._click_celda(_fila(la, 100.18), C_ASK)
-    de_mas = len(a.get_open_orders()) == antes
+    de_mas = _ultima_orden(a, antes, segundos=1.0) is None
     print(f"   con 25 en cartera, vendo 40 -> frenada: {de_mas}")
 
     la.chk_short.setChecked(True)              # a proposito: pasa
     antes = len(a.get_open_orders())
     la._click_celda(_fila(la, 100.22), C_ASK)
-    a_proposito = len(a.get_open_orders()) > antes
+    a_proposito = _ultima_orden(a, antes) is not None
     print(f"   con SS tildado (a proposito) -> pasa: {a_proposito}")
     ok4 = sin_pos and con_pos and de_mas and a_proposito
     print(f"   -> {'OK' if ok4 else '*** FALLO'}\n")

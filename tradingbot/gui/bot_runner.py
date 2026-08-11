@@ -18,15 +18,17 @@ class BotRunner(QObject):
     log = Signal(str)
     finished = Signal(str)
     manual = Signal(str, bool)  # posicion en manos del usuario (simbolo, fue_el_guardia)
+    pausado = Signal(bool)      # True = quedo pausado, False = siguio
 
     def __init__(self, broker, config, symbols, observador=None) -> None:
         super().__init__()
         self._symbols = symbols
-        # El motor escribe sus mensajes emitiendo la senal 'log', y avisa por
-        # 'manual' cuando una posicion queda para cerrar a mano.
+        # El motor escribe sus mensajes emitiendo la senal 'log', avisa por 'manual'
+        # cuando una posicion queda para cerrar a mano, y por 'pausado' cada vez que
+        # se pausa o sigue (incluidas las pausas que se toma SOLO).
         self.engine = BotEngine(
             broker, config, log=self.log.emit, on_manual=self.manual.emit,
-            observador=observador
+            observador=observador, on_pausa=self.pausado.emit,
         )
 
     @Slot()
