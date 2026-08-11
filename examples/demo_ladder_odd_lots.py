@@ -13,8 +13,16 @@ proximo sondeo.
 
 El REST sigue haciendo falta: en acciones poco liquidas el streaming solo manda
 datos cuando el precio CAMBIA, y sin el respaldo la escalera puede quedar vacia
-minutos. Por eso no se saca: se le da PRIORIDAD al streaming, y el REST entra
-solo cuando el streaming lleva un rato callado.
+minutos. Por eso no se saca, pero entra SOLO en dos casos: cuando todavia no
+llego ninguna del streaming para ese simbolo (la foto inicial) y cuando el
+streaming esta CAIDO.
+
+OJO con el criterio: NO se decide por tiempo. Una cotizacion no vence porque el
+mercado este quieto -- sigue siendo la verdad hasta que llegue otra. Medido en
+CHCI: 1 mensaje de streaming cada ~100 segundos, y la cotizacion seguia buena.
+
+Y no es solo cuestion de tamanos: el REST informa un mercado PEOR. Medido en
+AGYS, en el mismo instante: streaming 107.87 x 108.18, REST 107.74 x 108.34.
 
     python examples/demo_ladder_odd_lots.py
 """
@@ -44,30 +52,53 @@ def main() -> int:
     checks = {}
 
     # --- 1) llega el streaming con ODD LOTS (27 y 42: no son multiplos de 40) ---
+    l.set_stream_vivo(lambda: True)
     l.actualizar_quote("AAPL", 306.17, 306.18, 27, 42)
     checks["el streaming se muestra"] = l._last == (306.17, 306.18, 27, 42)
     print(f"  streaming        -> bid x{l._last[2]}  ask x{l._last[3]}")
 
     # --- 2) enseguida llega el sondeo REST con los tamanos redondeados ---
-    l.actualizar_quote_rest("AAPL", 306.17, 306.18, 400, 200)
+    l.actualizar_quote_rest("AAPL", 306.14, 306.21, 400, 200)
     tras_rest = l._last
     checks["el REST NO pisa al streaming"] = tras_rest == (306.17, 306.18, 27, 42)
     print(f"  + sondeo REST    -> bid x{tras_rest[2]}  ask x{tras_rest[3]}"
           f"   (antes quedaba en 400/200 y se perdian los odd lots)")
 
-    # --- 3) si el streaming se calla un rato, el REST SI tiene que entrar ---
-    #     (asi la escalera no queda vacia en acciones poco liquidas)
-    l._ultimo_stream = time.time() - (l.RESPALDO_SEGS + 1)
+    # --- 3) EL CASO REAL: el streaming se calla un rato LARGO ---
+    # En CHCI se midio 1 mensaje cada ~100 segundos. Aun asi la cotizacion del
+    # streaming SIGUE SIENDO VALIDA: no vence porque el mercado este quieto.
+    for _ in range(20):                       # 20 sondeos seguidos (mas de un minuto)
+        l.actualizar_quote_rest("AAPL", 306.14, 306.21, 400, 200)
+    checks["aunque el streaming calle 20 sondeos, no lo pisa"] = \
+        l._last == (306.17, 306.18, 27, 42)
+    print(f"  20 sondeos mas   -> bid x{l._last[2]}  ask x{l._last[3]}"
+          f"   (este era el bug: aca se perdian)")
+
+    # --- 4) si el streaming SE CAE, el respaldo tiene que entrar ---
+    vivo = {"ok": True}
+    l.set_stream_vivo(lambda: vivo["ok"])
+    vivo["ok"] = False
     l.actualizar_quote_rest("AAPL", 306.20, 306.22, 400, 200)
-    checks["si el streaming se calla, el REST entra"] = l._last == (306.20, 306.22, 400, 200)
-    print(f"  streaming mudo   -> bid x{l._last[2]}  ask x{l._last[3]}"
+    checks["si el streaming se CAE, el REST entra"] = l._last == (306.20, 306.22, 400, 200)
+    print(f"  streaming CAIDO  -> bid x{l._last[2]}  ask x{l._last[3]}"
           f"   (el respaldo hace su trabajo)")
 
-    # --- 4) y cuando el streaming vuelve, manda el streaming otra vez ---
+    # --- 5) y cuando el streaming vuelve, manda el streaming otra vez ---
+    vivo["ok"] = True
     l.actualizar_quote("AAPL", 306.21, 306.23, 9, 19)
     checks["cuando vuelve el streaming, manda el streaming"] = \
         l._last == (306.21, 306.23, 9, 19)
     print(f"  vuelve streaming -> bid x{l._last[2]}  ask x{l._last[3]}")
+
+    # --- 6) simbolo nuevo: el respaldo da la foto inicial ---
+    broker.set_quote("MSFT", bid=500.00, ask=500.40)
+    l.ed_symbol.setText("MSFT")
+    l._cambiar_symbol()
+    l.actualizar_quote_rest("MSFT", 500.00, 500.40, 400, 200)
+    checks["en un simbolo nuevo, el REST da la foto inicial"] = \
+        l._last == (500.00, 500.40, 400, 200)
+    print(f"  simbolo nuevo    -> bid x{l._last[2]}  ask x{l._last[3]}"
+          f"   (si no, la escalera quedaria vacia)")
 
     print()
     for nombre, ok in checks.items():

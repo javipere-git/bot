@@ -126,9 +126,6 @@ class LadderPanel(QWidget):
     AYUDA = ("Click en Bid = COMPRA / click en Ask = VENTA.  "
              "Click en tu orden = cancelar; arrastrala para moverla.")
     STALE_SECS = 8    # segundos sin quote nuevo -> aviso "datos viejos"
-    # Mientras el streaming haya mandado algo hace menos de esto, las lecturas por
-    # REST se descartan (son el respaldo, y traen los tamanos redondeados al lote).
-    RESPALDO_SEGS = 5.0
 
     # Pedidos al hilo que habla con el broker (ver ladder_worker.py). Van por
     # conexion EN COLA: el click vuelve al instante y las llamadas salen en orden.
@@ -156,7 +153,8 @@ class LadderPanel(QWidget):
         self._pos_qty = 0       # cantidad de la posicion (+largo / -corto)
         self._last_nbbo = None  # (bid_lvl, ask_lvl, paso) del ultimo centrado
         self._pendiente = False # hay datos nuevos por repintar (repintado throttleado)
-        self._ultimo_stream = 0.0  # cuando llego la ultima cotizacion del STREAMING
+        self._hay_stream = False   # ya llego alguna cotizacion del STREAMING?
+        self._stream_vivo = None   # funcion que dice si el streaming esta conectado
         self._ancla = None      # (top_lvl, bot_lvl, paso) fijado mientras esta congelada
 
         lay = QVBoxLayout(self)
@@ -370,6 +368,10 @@ class LadderPanel(QWidget):
         self._avg = None
         self._pos_qty = 0
         self._last = None
+        # simbolo nuevo: todavia no hay streaming de ESTE, asi que el respaldo por
+        # REST vuelve a entrar para dar la foto inicial (si no, la escalera queda
+        # vacia hasta que la accion se mueva, que en una iliquida puede ser un rato)
+        self._hay_stream = False
         self._last_nbbo = None
         self._ancla = None
         self.tabla.setRowCount(0)
@@ -411,30 +413,55 @@ class LadderPanel(QWidget):
 
     # ---------- datos en vivo ----------
     def actualizar_quote(self, symbol, bid, ask, bidsize, asksize) -> None:
-        """Cotizacion del STREAMING. Es la buena: la mas fresca y la mas detallada
-        (en Tastytrade, ademas, es la unica que trae los ODD LOTS)."""
+        """Cotizacion del STREAMING. Es la fuente buena: la mas fresca y la mas
+        completa. En Tastytrade, ademas, es la unica que trae los ODD LOTS, que
+        suelen estar DENTRO del spread y con MEJOR precio que los lotes redondos.
+        """
         if symbol != self._symbol:
             return
         if bid <= 0 or ask <= 0 or ask < bid:
             return
-        self._ultimo_stream = time.time()
         self._last = (bid, ask, bidsize, asksize)
+        self._hay_stream = True         # de aca en mas manda el streaming
         self._pendiente = True  # se repinta en el proximo tick del timer (throttleado)
 
-    def actualizar_quote_rest(self, symbol, bid, ask, bidsize, asksize) -> None:
-        """Cotizacion leida por REST (el sondeo del monitoreo). Es solo un RESPALDO:
-        sirve para las acciones poco liquidas, donde el streaming se queda mudo
-        minutos porque solo manda datos cuando el precio cambia.
+    def set_stream_vivo(self, proveedor) -> None:
+        """La ventana pasa una funcion que dice si el streaming esta conectado."""
+        self._stream_vivo = proveedor
 
-        Si el streaming esta despachando, esta se DESCARTA. Por que: el REST informa
-        tamanos redondeados al lote (multiplos de 40 o 100) y el streaming de
-        Tastytrade trae los ODD LOTS de verdad. Sin este filtro, cada sondeo pisaba
-        los odd lots y por eso aparecian un momento y despues se iban.
+    def _stream_conectado(self) -> bool:
+        try:
+            return bool(self._stream_vivo()) if self._stream_vivo else False
+        except Exception:  # noqa: BLE001
+            return False
+
+    def actualizar_quote_rest(self, symbol, bid, ask, bidsize, asksize) -> None:
+        """Cotizacion leida por REST (el sondeo del monitoreo). Es el RESPALDO.
+
+        Entra SOLO en dos casos:
+          - todavia no llego ninguna del streaming para este simbolo (la foto
+            inicial: si la accion esta quieta, sin esto la escalera queda vacia), o
+          - el streaming NO esta conectado (se cayo: hay que reponer el estado).
+
+        Mientras el streaming este vivo, esta se DESCARTA, aunque haga rato que no
+        manda nada. Por que: una cotizacion NO vence porque el mercado este quieto;
+        sigue siendo la verdad hasta que llegue otra. Y el REST informa un mercado
+        PEOR: redondea los tamanos al lote y esconde los odd lots, que estan dentro
+        del spread. Medido en AGYS: el streaming daba 107.87 x 108.18 y el REST
+        107.74 x 108.34 -- trece centavos peor de cada lado.
+
+        (Antes esto se decidia por tiempo, con una ventana de 5 segundos. Estaba
+        mal: en CHCI el streaming manda 1 mensaje cada 100 segundos, asi que el
+        respaldo ganaba casi siempre y borraba los odd lots.)
         """
-        if time.time() - getattr(self, "_ultimo_stream", 0.0) < self.RESPALDO_SEGS:
+        if self._hay_stream and self._stream_conectado():
             return                      # el streaming manda: no lo pisamos
-        self.actualizar_quote(symbol, bid, ask, bidsize, asksize)
-        self._ultimo_stream = 0.0       # vino del respaldo: no cuenta como streaming
+        if symbol != self._symbol:
+            return
+        if bid <= 0 or ask <= 0 or ask < bid:
+            return
+        self._last = (bid, ask, bidsize, asksize)
+        self._pendiente = True
 
     def _repintar(self) -> None:
         """Repinta la escalera si hay datos nuevos. Lo llama el timer cada 150 ms."""

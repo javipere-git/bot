@@ -735,6 +735,10 @@ class MainWindow(QMainWindow):
             return
         self._stream.quote.connect(self._anotar_movimiento)
         self._stream.quote.connect(self.ladder.actualizar_quote)
+        # el ladder consulta si el streaming sigue vivo: mientras lo este, ignora el
+        # sondeo por REST (que da un mercado peor: redondea al lote y esconde los
+        # odd lots). Si se cae, el respaldo vuelve a entrar solo.
+        self.ladder.set_stream_vivo(self._stream.esta_conectado)
         # Time & Sales: el mismo stream ya abierto trae las operaciones ejecutadas
         self._stream.quote.connect(self.tape.actualizar_quote)
         self._stream.trade.connect(self._anotar_operacion)

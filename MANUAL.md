@@ -834,13 +834,32 @@ Tradier o Alpaca NO se ven (por ejemplo un ask de 9 acciones a un precio mejor q
 el de los lotes redondos). No es un error: es informacion de mas.
 
 **El streaming le gana al sondeo por REST (12/08/2026)**. El ladder toma precios de
-DOS lados: el streaming y, como respaldo, el sondeo del monitoreo por REST. Ese
-respaldo hace falta -en acciones poco liquidas el streaming solo manda datos cuando
-el precio CAMBIA, y sin el la escalera queda vacia minutos-, pero informa los
-tamanos REDONDEADOS AL LOTE. Como pisaba al streaming, los odd lots de Tasty
-aparecian un momento y se iban en el siguiente sondeo. Ahora el REST se DESCARTA
-mientras el streaming haya mandado algo hace menos de 5 segundos. Medido en vivo:
-145 muestras con odd lot contra 17 redondas (antes se perdian cada 4 segundos).
+DOS lados: el streaming y, como respaldo, el sondeo del monitoreo por REST.
+
+El respaldo hace falta -en acciones poco liquidas el streaming solo manda datos
+cuando el precio CAMBIA, y sin el la escalera queda vacia minutos- pero informa un
+mercado PEOR. No es solo que redondee los tamanos al lote: al esconder los odd
+lots, que estan DENTRO del spread, muestra precios peores de los dos lados. Medido
+en AGYS, en el mismo instante:
+
+| | bid | ask |
+|---|---|---|
+| streaming | **107.87** x 7 | **108.18** x 2 |
+| REST | 107.74 x 100 | 108.34 x 200 |
+
+Trece centavos peor de cada lado. Por eso el REST entra SOLO en dos casos:
+
+1. **Todavia no llego ninguna del streaming para ese simbolo** (la foto inicial).
+2. **El streaming esta CAIDO** (hay que reponer el estado).
+
+**No se decide por tiempo, y eso importa**: una cotizacion NO vence porque el
+mercado este quieto, sigue siendo la verdad hasta que llegue otra. El primer
+intento uso una ventana de 5 segundos y no alcanzo: medido en CHCI, el streaming
+manda **1 mensaje cada ~100 segundos**, asi que el respaldo ganaba casi siempre.
+
+Verificado en vivo con CHCI (el peor caso): el REST da la foto inicial, llega el
+streaming a los ~8 s con `14.98 x 1` y se mantiene los 100 segundos completos, con
+25 sondeos REST de por medio que ya no lo pisan.
 
 Todo esto queda verificado en `examples/verificar_tastytrade.py` (agregale
 `--con-mercado-abierto` para probar tambien ejecuciones, posiciones y el resultado).
