@@ -123,6 +123,13 @@ class TastytradeMarketStream:
     def esta_conectado(self) -> bool:
         return self._conectado
 
+    def trae_odd_lots(self) -> bool:
+        """Si este feed publica ODD LOTS (tamanos que no son multiplos del
+        lote redondo, y que suelen estar DENTRO del spread).
+        SI: es el unico feed nuestro que los publica (medido en vivo).
+        """
+        return True
+
     # ---------- interno ----------
     def _enviar(self, mensaje: dict) -> None:
         """Los envios se serializan: el keepalive sale del mismo hilo que el resto,

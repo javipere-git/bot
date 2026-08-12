@@ -86,6 +86,13 @@ class TradierMarketStream:
         puede estar simplemente quieta). False si la conexion se cayo/reconectando."""
         return self._conectado
 
+    def trae_odd_lots(self) -> bool:
+        """Si este feed publica ODD LOTS (tamanos que no son multiplos del
+        lote redondo, y que suelen estar DENTRO del spread).
+        NO: entrega el NBBO de lotes redondos, asi que el streaming YA es el NBBO.
+        """
+        return False
+
     # ---------- interno ----------
     def _create_session(self) -> str:
         r = requests.post(

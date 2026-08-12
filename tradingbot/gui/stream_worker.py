@@ -54,6 +54,14 @@ class StreamWorker(QObject):
     def esta_conectado(self) -> bool:
         return self._stream.esta_conectado()
 
+    def trae_odd_lots(self) -> bool:
+        """Si este feed publica odd lots (solo Tastytrade). Cuando es True, el
+        streaming NO es el NBBO: el NBBO de lotes redondos hay que sacarlo aparte."""
+        try:
+            return bool(self._stream.trae_odd_lots())
+        except Exception:  # noqa: BLE001
+            return False
+
     def estado(self) -> str:
         if not self._started:
             return "inactivo"

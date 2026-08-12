@@ -739,6 +739,14 @@ class MainWindow(QMainWindow):
         # sondeo por REST (que da un mercado peor: redondea al lote y esconde los
         # odd lots). Si se cae, el respaldo vuelve a entrar solo.
         self.ladder.set_stream_vivo(self._stream.esta_conectado)
+        # y si ese feed trae odd lots (solo Tastytrade): entonces el streaming NO es
+        # el NBBO, y los carteles/botones tienen que ir con el NBBO real del REST
+        self.ladder.set_stream_odd_lots(self._stream.trae_odd_lots)
+        if self._stream.trae_odd_lots():
+            self.control.append_log(
+                "Este feed trae ODD LOTS: la escalera los muestra dentro del spread, "
+                "pero los carteles y los botones van con el NBBO real (lotes redondos)."
+            )
         # Time & Sales: el mismo stream ya abierto trae las operaciones ejecutadas
         self._stream.quote.connect(self.tape.actualizar_quote)
         self._stream.trade.connect(self._anotar_operacion)

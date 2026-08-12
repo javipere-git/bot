@@ -155,6 +155,8 @@ class LadderPanel(QWidget):
         self._pendiente = False # hay datos nuevos por repintar (repintado throttleado)
         self._hay_stream = False   # ya llego alguna cotizacion del STREAMING?
         self._stream_vivo = None   # funcion que dice si el streaming esta conectado
+        self._stream_odd = None    # funcion que dice si el streaming trae odd lots
+        self._nbbo_rest = None     # NBBO real (lotes redondos), leido por REST
         self._ancla = None      # (top_lvl, bot_lvl, paso) fijado mientras esta congelada
 
         lay = QVBoxLayout(self)
@@ -368,6 +370,7 @@ class LadderPanel(QWidget):
         self._avg = None
         self._pos_qty = 0
         self._last = None
+        self._nbbo_rest = None
         # simbolo nuevo: todavia no hay streaming de ESTE, asi que el respaldo por
         # REST vuelve a entrar para dar la foto inicial (si no, la escalera queda
         # vacia hasta que la accion se mueva, que en una iliquida puede ser un rato)
@@ -435,6 +438,33 @@ class LadderPanel(QWidget):
         except Exception:  # noqa: BLE001
             return False
 
+    def set_stream_odd_lots(self, proveedor) -> None:
+        """La ventana avisa si el streaming trae odd lots (hoy, solo Tastytrade).
+
+        Cuando los trae, el streaming NO es el NBBO: muestra el mejor precio de
+        CUALQUIER tamano, incluidos lotes de 1 o 2 acciones metidos dentro del
+        spread. Ahi el NBBO de verdad (el de lotes redondos) sale del REST, y es el
+        que se usa para los carteles de arriba y para los botones de comprar/vender.
+        """
+        self._stream_odd = proveedor
+
+    def _hay_odd_lots(self) -> bool:
+        try:
+            return bool(self._stream_odd()) if self._stream_odd else False
+        except Exception:  # noqa: BLE001
+            return False
+
+    def nbbo(self):
+        """El NBBO REAL (lotes redondos), que es contra el que se opera.
+
+        Con Tradier y Alpaca el streaming YA es el NBBO, asi que es directamente lo
+        ultimo que llego. Con Tastytrade el streaming trae odd lots, asi que el NBBO
+        sale de la lectura por REST.
+        """
+        if self._hay_odd_lots() and self._nbbo_rest:
+            return self._nbbo_rest
+        return self._last
+
     def actualizar_quote_rest(self, symbol, bid, ask, bidsize, asksize) -> None:
         """Cotizacion leida por REST (el sondeo del monitoreo). Es el RESPALDO.
 
@@ -454,22 +484,30 @@ class LadderPanel(QWidget):
         mal: en CHCI el streaming manda 1 mensaje cada 100 segundos, asi que el
         respaldo ganaba casi siempre y borraba los odd lots.)
         """
-        if self._hay_stream and self._stream_conectado():
-            return                      # el streaming manda: no lo pisamos
         if symbol != self._symbol:
             return
         if bid <= 0 or ask <= 0 or ask < bid:
             return
-        self._last = (bid, ask, bidsize, asksize)
+        # SIEMPRE se guarda como NBBO real: el REST informa lotes redondos, que es
+        # contra lo que se opera de verdad. Los carteles de arriba y los botones de
+        # comprar/vender salen de aca cuando el streaming trae odd lots.
+        self._nbbo_rest = (bid, ask, bidsize, asksize)
         self._pendiente = True
+        if self._hay_stream and self._stream_conectado():
+            return                      # para MOSTRAR la escalera manda el streaming
+        self._last = (bid, ask, bidsize, asksize)
 
     def _repintar(self) -> None:
         """Repinta la escalera si hay datos nuevos. Lo llama el timer cada 150 ms."""
         if not self._pendiente:
             return
         self._pendiente = False
-        if self._last:
-            bid, ask, _bsz, _asz = self._last
+        # Los carteles y los botones van SIEMPRE con el NBBO REAL (lotes redondos):
+        # es el precio contra el que se opera de verdad. Si mostraran el de los odd
+        # lots, "Comprar al ask" diria un precio donde a lo mejor hay 2 acciones.
+        ref = self.nbbo()
+        if ref:
+            bid, ask, _bsz, _asz = ref
             self.lbl_bid.setText(f"BID {bid:.2f}")
             self.lbl_ask.setText(f"ASK {ask:.2f}")
             self.btn_buy_ask.setText(f"Comprar al ask {ask:.2f}")
@@ -503,10 +541,23 @@ class LadderPanel(QWidget):
     def _repoblar(self) -> None:
         if not self._last:
             return
-        bid, ask, bidsize, asksize = self._last
         step_c = round(self.STEPS[self._step_idx] * 100)
+        # El NBBO REAL manda para el encuadre y para el resaltado fuerte: es el
+        # mercado contra el que se opera. Los odd lots (si el feed los trae) se
+        # pintan ADEMAS, en sus propios niveles dentro del spread.
+        ref = self.nbbo() or self._last
+        bid, ask, bidsize, asksize = ref
+        odd = self._last if (self._hay_odd_lots() and self._last is not ref) else None
         bid_lvl = round(round(bid * 100) / step_c)
         ask_lvl = round(round(ask * 100) / step_c)
+        odd_bid_lvl = odd_ask_lvl = None
+        if odd:
+            o_bid, o_ask, o_bsz, o_asz = odd
+            # solo si de verdad estan ADENTRO del spread (si no, no aportan nada)
+            if o_bid > bid:
+                odd_bid_lvl = round(round(o_bid * 100) / step_c)
+            if o_ask < ask:
+                odd_ask_lvl = round(round(o_ask * 100) / step_c)
         nbbo = (bid_lvl, ask_lvl, step_c)
 
         # CONGELADO: con el mouse sobre la escalera, los precios quedan CLAVADOS en
@@ -558,10 +609,16 @@ class LadderPanel(QWidget):
             # ask resaltados en el tono fuerte
             es_best_bid = lvl == bid_lvl
             es_best_ask = lvl == ask_lvl
-            self._set(i, C_BID, str(int(bidsize)) if es_best_bid else "",
+            # el NBBO real va resaltado fuerte; el odd lot, con el tono suave de la
+            # columna, para que se vea que esta ahi pero que NO es el primer nivel
+            texto_bid = str(int(bidsize)) if es_best_bid else (
+                str(int(odd[2])) if odd and lvl == odd_bid_lvl else "")
+            texto_ask = str(int(asksize)) if es_best_ask else (
+                str(int(odd[3])) if odd and lvl == odd_ask_lvl else "")
+            self._set(i, C_BID, texto_bid,
                       bg=colores("verde") if es_best_bid else colores("verde_col"),
                       best=es_best_bid)
-            self._set(i, C_ASK, str(int(asksize)) if es_best_ask else "",
+            self._set(i, C_ASK, texto_ask,
                       bg=colores("rojo") if es_best_ask else colores("rojo_col"),
                       best=es_best_ask)
             self._set_orden(i, C_BUY, buy_lvl.get(lvl))
@@ -703,13 +760,19 @@ class LadderPanel(QWidget):
             self._cargar_cantidades()
             self._log(f"Ladder: botones de cantidad -> {cantidades_botones()}")
 
+    # Estos dos botones mandan al NBBO REAL, no al precio de un odd lot. Motivo: un
+    # ask de 2 acciones no es el mercado, y el boton tiene que hacer LO QUE DICE.
+    # Ademas no se pierde nada: una compra limite al ask real se lleva PRIMERO los
+    # odd lots que esten mas baratos, asi que nunca se paga de mas.
     def _comprar_al_ask(self) -> None:
-        if self._last:
-            self._mandar(Side.BUY, self._last[1])
+        ref = self.nbbo()
+        if ref:
+            self._mandar(Side.BUY, ref[1])
 
     def _vender_al_bid(self) -> None:
-        if self._last:
-            self._mandar(self._lado_venta(), self._last[0])
+        ref = self.nbbo()
+        if ref:
+            self._mandar(self._lado_venta(), ref[0])
 
     def _lado_venta(self):
         """SELL_SHORT si esta tildado SS; si no, SELL (que solo cierra un largo)."""

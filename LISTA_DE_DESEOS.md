@@ -44,6 +44,44 @@
   exchange `B`. Logica en `core/horarios.py`. Ver MANUAL.md seccion 3c.
 - **Time & Sales (descripcion original):** panel con hora/precio/tamano de cada operacion. Se obtiene del streaming de Tradier (evento "timesale", requiere token de produccion). Sumarlo cuando montemos el streaming (Fase 4). Cuidado con el volumen de mensajes: limitar a las ultimas N filas, actualizar en lote y procesar en hilo aparte. La app de Marian ya lo tenia.
 - **Aviso sonoro al pasar a manual:** ademas del cartel/notificacion, un ruido cuando el bot pasa a manual (sea por el guardia o porque no pudo cerrar con los 4 niveles). Necesita la pantalla (Fase 5).
-- **Odd lots dentro del spread (PENDIENTE, tomar con pinzas):** el NBBO (1er nivel) lo fijan los lotes de 100+ acciones, pero dentro del spread puede haber bids/asks chicos (odd lots) que no marcan el NBBO. Ej.: NBBO 100.00 x 100.20 pero un odd lot de 80 acciones en 100.07 -> quizas no convenga postear 50 acciones debajo de 100.07. Muchos brokers no los muestran. CONFIRMADO: Tradier es Level 1 y NO envia odd lots (no aparecen en el stream ni en el REST); no se pueden mostrar con su API. Requeriria un feed Level 2 / de profundidad de otro proveedor.
+- **Odd lots dentro del spread:** el NBBO (1er nivel) lo fijan los lotes redondos (100
+  acciones, o 40 en las de mas de $250), pero dentro del spread puede haber bids/asks
+  chicos (odd lots) que no marcan el NBBO.
+
+  **QUIEN LOS TIENE (medido en vivo, 11-12/08/2026):** solo el **STREAMING de
+  TASTYTRADE** (DXLink). El REST de Tastytrade, Tradier (stream y REST) y Alpaca SIP
+  (stream y REST, 8.668 tamanos medidos) dan SOLO lotes redondos. Ejemplo real en AGYS,
+  mismo instante: Tasty `107.87 x 7 / 108.18 x 2`, Alpaca `107.72 x 100 / 108.20 x 200`.
+
+  **FILTRO QUE QUIERE EL USUARIO (especificado el 12/08/2026; implementar cuando se
+  llegue a este punto):**
+
+  Regla general: **los PRECIOS (entradas, salidas y guardia) se siguen calculando sobre
+  el NBBO real, SIN los odd lots.** Los filtros actuales (max cambios bid/ask, max
+  spread ultimos X seg, max spread en % del precio) tambien siguen midiendo sobre el
+  NBBO, igual que hoy. Los odd lots se usan SOLO para el filtro nuevo.
+
+  **El filtro nuevo:** el bot NO manda una orden si hay un odd lot posteado a un precio
+  PEOR que el de esa orden (o sea, mas adentro del spread). Si el precio es EXACTAMENTE
+  el mismo que el del odd lot, tambien la saltea.
+
+  - *Entrada*: se saltea a la orden siguiente. Ejemplo: XYZ con NBBO `300 @ 100.00 x
+    200 @ 101.00` y odd lots `24 @ 100.15 / 9 @ 100.48`. Orden 1 iria a 100.10, pero hay
+    un odd lot de 24 en 100.15 (peor precio) -> la saltea. Orden 2 iria a 100.20, no hay
+    odd lot peor -> la manda. Si SOLO hubiera una orden de entrada y quedara salteada,
+    el bot no opera ese simbolo y pasa al siguiente.
+  - *Salida*: misma logica. Con salidas al 60%, 40% y cruzar: la de 60% iria a 100.60 y
+    hay un odd lot de 9 en 100.48 (peor precio para vender) -> saltea. La de 40% va a
+    100.40, esta por debajo del odd lot -> la manda. La de cruzar SIEMPRE se manda.
+  - Si TODAS las salidas quedan salteadas y hay una configurada para cruzar, va directo
+    a esa. Si no hay ninguna de cruzar, pasa a MANUAL.
+
+  **Estado tecnico:** para que el bot pueda aplicarlo, primero tiene que VER los odd
+  lots. Hoy no los ve: sus precios salen del REST (`get_quote`), no del streaming. El
+  observador de movimiento SI se alimenta del streaming. Habria que darle al motor
+  acceso a la ultima cotizacion del streaming, igual que se hizo en el ladder.
+
+  **Ojo de diseno:** los odd lots suelen ser de 1-2 acciones, y solo Tasty los tiene.
+  Con los otros brokers el filtro tendria que quedar inactivo (comportarse como hoy).
 
 _(Esta lista es viva: se va completando.)_
