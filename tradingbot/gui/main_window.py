@@ -356,6 +356,10 @@ class MainWindow(QMainWindow):
             )
             return
         self._alarma_abierta = True
+        # SONAR YA, antes de abrir el cartel. Antes solo arrancaba el temporizador,
+        # asi que el primer sonido llegaba 1,2 segundos despues: si aceptabas rapido,
+        # la alarma no sonaba NUNCA. En una alerta de seguridad eso no va.
+        sonar_alerta()
         timer = QTimer(self)
         timer.setInterval(1200)
         timer.timeout.connect(sonar_alerta)

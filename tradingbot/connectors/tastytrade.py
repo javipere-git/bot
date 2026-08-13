@@ -92,6 +92,26 @@ _ESTADO = {
 }
 
 
+def _fecha(valor) -> str:
+    """Normaliza una fecha de Tasty a ISO, que es lo que espera la pantalla.
+
+    Tasty mezcla dos formatos: 'received-at' viene en ISO
+    ('2026-08-10T19:40:05.176+00:00') pero 'updated-at' viene como MILISEGUNDOS
+    (1786390805386). Sin convertirlo, la pantalla no podia leerlo y mostraba los
+    primeros digitos crudos ('17866414' en la tabla de ordenes).
+    """
+    if valor in (None, "", "None"):
+        return ""
+    texto = str(valor)
+    if texto.isdigit():                     # milisegundos desde 1970
+        try:
+            from datetime import datetime, timezone
+            return datetime.fromtimestamp(int(texto) / 1000, timezone.utc).isoformat()
+        except (ValueError, OSError, OverflowError):
+            return ""
+    return texto
+
+
 def _f(valor, por_defecto: float = 0.0) -> float:
     """Tasty manda los numeros como TEXTO ('100.5'); a veces vienen vacios o 'None'."""
     try:
@@ -302,8 +322,8 @@ class TastytradeBroker(Broker):
             status=_ESTADO.get(str(o.get("status") or ""), OrderStatus.PENDING),
             filled_quantity=llenado,
             avg_fill_price=(suma / llenado) if llenado else 0.0,
-            create_date=str(o.get("received-at") or ""),
-            transaction_date=str(o.get("updated-at") or ""),
+            create_date=_fecha(o.get("received-at")),
+            transaction_date=_fecha(o.get("updated-at")),
             extended=extended,
         )
 
