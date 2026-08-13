@@ -20,6 +20,7 @@ from ..connectors.hibrido import BrokerHibrido
 from ..connectors.tradier import TradierBroker
 from ..connectors.tastytrade import TastytradeBroker
 from ..connectors.tastytrade_stream import TastytradeMarketStream
+from ..connectors.tastytrade_account_stream import TastytradeAccountStream
 
 
 @dataclass
@@ -116,6 +117,13 @@ def perfiles_disponibles() -> list[Perfil]:
     def avisos_tradier():
         return AccountWorker(
             TradierAccountStream.from_credentials(environment="production"), "tradier")
+
+    def avisos_tasty(entorno):
+        def crear():
+            return AccountWorker(
+                TastytradeAccountStream.from_credentials(environment=entorno),
+                "tastytrade")
+        return crear
 
     def avisos_alpaca(entorno):
         def crear():
@@ -238,6 +246,7 @@ def perfiles_disponibles() -> list[Perfil]:
         if hay_datos_tradier:
             perfiles.append(Perfil(
                 id="tasty_sandbox_datos_tradier",
+                _crear_avisos=avisos_tasty("sandbox"),
                 datos_nombre="Tradier",
                 modo_texto="SANDBOX",
                 broker_nombre="Tastytrade",
@@ -251,6 +260,7 @@ def perfiles_disponibles() -> list[Perfil]:
             ))
         perfiles.append(Perfil(
             id="tasty_sandbox",
+            _crear_avisos=avisos_tasty("sandbox"),
             datos_nombre="(sin precios)",
             modo_texto="SANDBOX",
             broker_nombre="Tastytrade",
@@ -266,6 +276,7 @@ def perfiles_disponibles() -> list[Perfil]:
         if hay_datos_tradier:
             perfiles.append(Perfil(
                 id="tasty_live_datos_tradier",
+                _crear_avisos=avisos_tasty("production"),
                 datos_nombre="Tradier",
                 modo_texto="LIVE",
                 broker_nombre="Tastytrade",
@@ -279,6 +290,7 @@ def perfiles_disponibles() -> list[Perfil]:
             ))
         perfiles.append(Perfil(
             id="tasty_live",
+            _crear_avisos=avisos_tasty("production"),
             datos_nombre="Tastytrade",
             modo_texto="LIVE",
             broker_nombre="Tastytrade",

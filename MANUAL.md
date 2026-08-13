@@ -815,6 +815,18 @@ cableado (`connectors/tastytrade_stream.py`), asi que el perfil "datos propios d
 Tastytrade" tiene precios en vivo, Time & Sales, y los filtros de movimiento del
 bot funcionan.
 
+**Avisos de cuenta (13/08/2026)**: Tastytrade tambien tiene su "Account Streamer"
+(`connectors/tastytrade_account_stream.py`, `wss://streamer.tastyworks.com`), y ya
+esta cableado en los cuatro perfiles. Sin el, las ordenes y la posicion se
+refrescaban recien en el sondeo de cada 4 segundos y el ladder se sentia MUY lento
+al mandar, mover o cancelar. Medido despues de conectarlo: el aviso llega a la
+pantalla en **0,38 segundos**.
+
+Detalles del protocolo: se abre el websocket, se manda `connect` con las cuentas y
+el token (con `Bearer` adelante) y despues `heartbeat` cada 20 s. El ORDEN importa:
+si se manda el heartbeat antes del connect, responden "not implemented". El token
+se pide de nuevo en cada latido porque los de Tasty duran 15 minutos.
+
 **>>> EL STREAMING DE TASTY TRAE ODD LOTS <<<** (medido el 11/08/2026, mercado
 abierto). Es el UNICO de nuestros feeds que los muestra:
 
