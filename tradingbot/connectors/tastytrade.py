@@ -410,49 +410,67 @@ class TastytradeBroker(Broker):
         return _f(valor) if valor is not None else None
 
     def get_day_pnl(self) -> DayPnL | None:
-        """Resultado REALIZADO desde que la app se conecto.
+        """Resultado del DIA (realizado + lo que esta abierto).
 
-        OJO, esto tiene truco y conviene entenderlo (verificado en vivo el
-        10/08/2026 contra el sandbox):
+        EL DATO BUENO es 'intraday-equities-cash-amount': cuanto se movio el
+        efectivo HOY por operar acciones, con su signo en
+        'intraday-equities-cash-effect' (Debit = salio plata). Ojo, ese numero
+        solo no alcanza: si compraste algo y sigue ABIERTO, incluye lo que
+        pagaste (medido: 3073.116 con 10 AAPL compradas). Sumandole el COSTO de
+        lo abierto, esa parte se cancela y queda el resultado realizado limpio:
 
-        Tasty NO informa el resultado del dia en balances. No existen los campos
-        'realized-day-gain' / 'unrealized-day-gain' de otros brokers, y
-        'net-liquidating-value' en el sandbox queda clavado en el valor inicial.
-        El campo 'intraday-equities-cash-amount' TAMPOCO sirve: mientras hay una
-        posicion abierta muestra el COSTO DE LA COMPRA (medido: 3073.116 con 10
-        AAPL compradas), no el resultado.
+            realizado = movimiento_de_efectivo + costo_de_lo_abierto
 
-        Lo que si es solido es el EFECTIVO mas el costo de lo que tengas abierto:
+        Verificado el 13/08/2026 en la cuenta real: dio +44.206, que es
+        exactamente el efectivo (3544.206) menos lo depositado (3500).
 
-            equivalente = efectivo + suma(precio_promedio * cantidad)
+        Es el resultado del DIA COMPLETO, no "desde que abriste la app": sobrevive
+        a cerrar y reabrir. Y como es 'equities cash', un deposito no lo ensucia.
 
-        Ese numero no se mueve por como cambie el precio (lo no realizado no lo
-        toca); solo baja o sube cuando CERRAS algo (o por comisiones). Su
-        VARIACION entre dos momentos es exactamente el resultado realizado en ese
-        lapso, que es lo que necesita el reporte por pasada.
-
-        Como no sabemos cuanto habia al abrir la rueda, se ancla en la primera
-        lectura: lo que se informa es el realizado DESDE QUE LA APP SE CONECTO
-        (si operaste antes con otra herramienta, eso no entra).
-
-        Lo no realizado necesita cotizaciones; si el broker de datos no las da
-        (sandbox), se informa 0 y la pantalla lo completa por su cuenta.
+        Si ese campo no viniera, se cae al metodo anterior (anclar en la primera
+        lectura), que sirve igual para medir el neto de una pasada del bot.
         """
         try:
             js = self._pedir("GET", f"/accounts/{self._account}/balances")
         except Exception:  # noqa: BLE001
             return None
         d = js.get("data", {})
-        efectivo = _f(d.get("cash-balance"))
         try:
-            costo_abierto = sum(p.avg_price * p.quantity for p in self.get_positions())
+            posiciones = self.get_positions()
         except Exception:  # noqa: BLE001
-            costo_abierto = 0.0
-        equivalente = efectivo + costo_abierto
-        if self._ancla_realizado is None:
-            self._ancla_realizado = equivalente
-        return DayPnL(realizado=round(equivalente - self._ancla_realizado, 4),
-                      no_realizado=0.0)
+            posiciones = []
+        costo_abierto = sum(p.avg_price * p.quantity for p in posiciones)
+
+        realizado = None
+        if d.get("intraday-equities-cash-amount") is not None:
+            monto = _f(d.get("intraday-equities-cash-amount"))
+            if str(d.get("intraday-equities-cash-effect", "")).lower() == "debit":
+                monto = -monto
+            realizado = monto + costo_abierto
+
+        if realizado is None:                      # respaldo: el metodo viejo
+            equivalente = _f(d.get("cash-balance")) + costo_abierto
+            if self._ancla_realizado is None:
+                self._ancla_realizado = equivalente
+            realizado = equivalente - self._ancla_realizado
+
+        return DayPnL(realizado=round(realizado, 4),
+                      no_realizado=round(self._no_realizado(posiciones), 4))
+
+    def _no_realizado(self, posiciones) -> float:
+        """Lo que ganan/pierden las posiciones ABIERTAS al precio de ahora.
+        Cuesta una cotizacion por posicion; el bot trabaja de a una, asi que en la
+        practica es una sola. Si algo falla, devuelve 0 y no rompe el resultado."""
+        total = 0.0
+        for p in posiciones[:5]:                   # tope por las dudas
+            try:
+                q = self.get_quote(p.symbol)
+                medio = (q.bid + q.ask) / 2 if (q.bid and q.ask) else (q.bid or q.ask)
+                if medio:
+                    total += (medio - p.avg_price) * p.quantity
+            except Exception:  # noqa: BLE001
+                continue
+        return total
 
     def distingue_venta_en_corto(self) -> bool:
         """True: Tasty tiene 'Sell to Close' y 'Sell to Open' separados, asi que el
