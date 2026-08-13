@@ -43,7 +43,7 @@ from ..core.config import (
 )
 from ..core.models import Side
 from ..core.watchlist import parse_watchlist
-from .estado_ui import poner_titulo
+from .estado_ui import guardar_tilde, leer_tilde, poner_titulo
 
 
 def _spin(minimum, maximum, value, decimals=2, step=0.01, suffix=""):
@@ -360,6 +360,11 @@ class ControlPanel(QWidget):
         )
         self.chk_ext = QCheckBox("Extended hours (pre/post)")
         self.chk_sound = QCheckBox("Sonido al ejecutar")
+        # se recuerda entre sesiones: antes arrancaba apagado siempre y parecia
+        # que los sonidos no funcionaban
+        self.chk_sound.setChecked(leer_tilde("sonido_ejecucion", False))
+        self.chk_sound.toggled.connect(
+            lambda v: guardar_tilde("sonido_ejecucion", v))
         for c in (self.chk_pause, self.chk_loop, self.chk_ext, self.chk_sound):
             lay.addWidget(c)
         return g
@@ -452,7 +457,9 @@ class ControlPanel(QWidget):
         form.addRow("Referencia:", self.combo_guard_ref)
 
         self.chk_guard_alarma = QCheckBox("Alarma continua hasta confirmar")
-        self.chk_guard_alarma.setChecked(True)
+        self.chk_guard_alarma.setChecked(leer_tilde("alarma_guardia", True))
+        self.chk_guard_alarma.toggled.connect(
+            lambda v: guardar_tilde("alarma_guardia", v))
         self.chk_guard_alarma.setToolTip(
             "Si el guardia se dispara: la alarma suena REPETIDA y aparece un cartel;\n"
             "no se apaga hasta que aprietes Aceptar. Destildado: un solo aviso, como siempre."

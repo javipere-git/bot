@@ -114,6 +114,27 @@ def guardar_cantidades_botones(valores) -> None:
         _AJUSTES.setValue("ladder/cantidades", [str(v) for v in limpias])
 
 
+def guardar_tilde(clave: str, valor: bool) -> None:
+    """Recuerda un tilde entre sesiones.
+
+    Se usa SOLO para los avisos (sonidos y alarma), que son preferencias y no
+    cambian como opera el bot. Los parametros de trading (cantidad, offsets,
+    filtros) NO se restauran a proposito: que reaparezcan solos seria peligroso.
+
+    Por que existe: el tilde "Sonido al ejecutar" arranca apagado, asi que cada
+    vez que se abria la app quedaba en off y parecia que los sonidos "no
+    funcionaban".
+    """
+    _AJUSTES.setValue(f"avisos/{clave}", "1" if valor else "0")
+
+
+def leer_tilde(clave: str, por_defecto: bool) -> bool:
+    v = _AJUSTES.value(f"avisos/{clave}")
+    if v is None:
+        return por_defecto
+    return str(v) in ("1", "true", "True")
+
+
 def poner_titulo(label, tamano_px: int = 13) -> None:
     """Deja una etiqueta en negrita y del tamano pedido SIN hoja de estilo.
 
