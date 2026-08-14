@@ -137,8 +137,13 @@
 | AAPL (bid / ask) | 70 / 62 | 110 / 118 | **344 / 583** |
 | TSLA (bid / ask) | 105 / 107 | 222 / 252 | **1.274 / 1.625** |
 
-**Tradier también viene muestreado en los quotes** (3-6× menos que Alpaca SIP), no solo en los prints. **Solo Alpaca SIP mide bien estos filtros.** Con Tasty el recorte es de 5 a 12×.
-Consecuencia: los tres filtros de "últimos X segundos" **filtran de MENOS** con Tasty y con Tradier, y los valores calibrados con un feed no sirven para otro. *(Corrección: el 12/08 predije que con Tasty "max cambios" filtraría de MÁS por el parpadeo de los odd lots. Medido, es al revés: el tope de ~2 eventos/segundo pesa mucho más.)*
+**Precisión importante (el usuario objetó, con razón, la primera redacción).** Los precios de Tradier son **correctos, consolidados y en tiempo real** — idénticos a Alpaca SIP símbolo por símbolo. Lo que pasa es otra cosa: **Tradier entrega los quotes con un tope de ~2,5-3 mensajes por segundo POR SÍMBOLO.** No manda cada cambio intermedio, pero el que manda es el bueno. Por eso a la vista es perfecto y coincide con Schwab.
+
+- **No perdemos nada nosotros**: medido en crudo, recibimos 354 líneas y procesamos las 354.
+- **El tope es por símbolo, no por conexión**: con 3 símbolos el total es 6,3/s y con 30 sube a 56,8/s, manteniendo ~2,5-3/s cada uno. Con watchlists grandes no se degrada.
+- Tasty tiene un tope parecido (~2/s) **y además es solo Nasdaq**.
+
+Consecuencia real, acotada: **solo los filtros que CUENTAN eventos en una ventana** se ven afectados; para decidir precios (entrada, salida, guardia) Tradier es perfecto. *(Corrección: el 12/08 predije que con Tasty "max cambios" filtraría de MÁS por el parpadeo de los odd lots. Medido, es al revés: el tope pesa mucho más.)*
 - **El feed gratuito de Alpaca (IEX) no sirve para calcular órdenes**: da bid/ask disparatados (MU 868,53 × 940,00 contra 915,76 × 916,40 real) y a veces ask en 0,00. Además casi no manda quotes (0 en 30 s con mercado abierto).
 - **Tradier no tiene overnight**; sus precios se congelan a las 20:00 ET. Alpaca sí, por el feed `boats` (Blue Ocean ATS, **20:00–04:00 ET, domingo a jueves**).
 
@@ -158,6 +163,8 @@ Consecuencia: los tres filtros de "últimos X segundos" **filtran de MENOS** con
 - **La regla PDT (los US$25.000) fue eliminada el 4 de junio de 2026.** Cierra una preocupación que se arrastró desde julio.
 - **Alpaca**: no ofrece cuentas cash, todas son margin limitadas por saldo (<$2.000 → 1x sin shorting; ≥$2.000 → 2x + corto; ≥$25.000 → 4x intradiario). **Calcula el margen con el saldo del último cierre**, no con el del momento.
 - **Alpaca: solo se puede shortear ETB, y las ETB tienen costo de préstamo CERO.** Las hard-to-borrow se rechazan. Si una acción pasa a HTB durante la noche, cancela las órdenes short abiertas antes de la apertura.
+- **Tastytrade sí da el costo de préstamo en %** (corrección del 14/08 — antes había dicho que ningún broker lo daba). `GET /instruments/equities?symbol[]=...` devuelve, **en una sola llamada para muchos símbolos**: `borrow-rate` (medido: APLM 3,956 · KPLT 0,0914 · las ETB en 0), `lendability`, `active`, **`is-closing-only`** (bloqueada para abrir), `is-illiquid`, `is-fraud-risk`, `overnight-trading-permitted` y `pre-ipo`. Es la forma barata de saber qué símbolos están bloqueados **antes** de operarlos, sin costo por orden.
+- **Tasty tiene "dry-run"** (`POST /accounts/{}/orders/dry-run`): simula la orden sin mandarla y devuelve el impacto en poder de compra, las comisiones y los avisos; si no se puede, responde **422 con el motivo en texto** (*"Trading of ZZZZQQ is not supported"*, *"Order size exceeds the limit"*). Cuesta una llamada y una vuelta de red **por orden**, así que para pre-filtrar la watchlist conviene la consulta de instrumentos; el dry-run sirve para lo que solo él responde: si **esta** orden, con **este** tamaño, entraría.
 - **Criterio "non-retail" de Alpaca**: uno de sus seis criterios es **fill rate menor al 1%** (más del 99% canceladas). El usuario medía **4,39%**, y no cae en ninguno de los otros cinco. Consecuencia si lo marcaran: pierde la comisión cero y los datos pasan a tarifa profesional. **Matiz que lo perjudica**: como Alpaca reemplaza en vez de modificar, cada repricio suma una cancelación a su estadística.
 - **Cancelar no cuesta plata** (el TAF de FINRA y el fee de la SEC se cobran solo sobre lo ejecutado). La SEC reporta que **el 96,8% de las órdenes del mercado se cancelan**.
 
