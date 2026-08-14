@@ -41,7 +41,17 @@ import websocket
 
 # Campos que se piden por evento. El ORDEN importa: asi vienen los valores.
 CAMPOS_QUOTE = ["eventType", "eventSymbol", "bidPrice", "askPrice", "bidSize", "askSize"]
-CAMPOS_TRADE = ["eventType", "eventSymbol", "price", "size", "dayVolume"]
+# Para el Time & Sales va "TimeAndSale" y NO "Trade".
+#
+# "Trade" parece la cinta pero NO lo es: es el RESUMEN de la ultima operacion, y
+# encima conflado (llega cada 0,1 s). Repite el mismo precio una y otra vez
+# cambiando solo el volumen del dia, y no trae el exchange. Con eso, la cinta de
+# Tasty se veia siempre imprimiendo al mismo precio y con la columna Exch vacia.
+#
+# Medido el 14/08/2026 sobre AAPL, en la misma ventana de 40 segundos:
+#     Trade        ->  81 eventos,   9 precios distintos, sin exchange
+#     TimeAndSale  -> 364 eventos,  55 precios distintos, CON exchange
+CAMPOS_TAS = ["eventType", "eventSymbol", "time", "price", "size", "exchangeCode"]
 
 CANAL = 3          # numero de canal (lo elegimos nosotros)
 KEEPALIVE_S = 30   # cortan a los 60 s sin señales de vida
@@ -138,7 +148,7 @@ class TastytradeMarketStream:
             self._ws.send(json.dumps(mensaje))
 
     def _suscripciones(self, symbols) -> list[dict]:
-        tipos = ["Quote"] + (["Trade"] if self._on_trade else [])
+        tipos = ["Quote"] + (["TimeAndSale"] if self._on_trade else [])
         return [{"type": t, "symbol": s} for s in symbols for t in tipos]
 
     def _esperar(self, tipo: str, condicion=None, segundos: float = 15.0) -> dict | None:
@@ -177,7 +187,7 @@ class TastytradeMarketStream:
 
         campos = {"Quote": CAMPOS_QUOTE}
         if self._on_trade:
-            campos["Trade"] = CAMPOS_TRADE
+            campos["TimeAndSale"] = CAMPOS_TAS
         self._enviar({"type": "FEED_SETUP", "channel": CANAL,
                       "acceptAggregationPeriod": 0.1,
                       "acceptDataFormat": "COMPACT",
@@ -232,7 +242,7 @@ class TastytradeMarketStream:
             except (IndexError, TypeError):
                 continue
             campos = CAMPOS_QUOTE if nombre == "Quote" else (
-                CAMPOS_TRADE if nombre == "Trade" else None)
+                CAMPOS_TAS if nombre == "TimeAndSale" else None)
             if campos is None or not isinstance(valores, list):
                 continue
             n = len(campos)
@@ -248,9 +258,19 @@ class TastytradeMarketStream:
             if nombre == "Quote" and self._on_quote is not None:
                 # eventType, eventSymbol, bidPrice, askPrice, bidSize, askSize
                 self._on_quote(sym, _num(v[2]), _num(v[3]), _num(v[4]), _num(v[5]))
-            elif nombre == "Trade" and self._on_trade is not None:
-                # eventType, eventSymbol, price, size, dayVolume
-                # DXLink no manda el exchange en este evento: va vacio
-                self._on_trade(sym, _num(v[2]), _num(v[3]), "", time.time())
+            elif nombre == "TimeAndSale" and self._on_trade is not None:
+                # eventType, eventSymbol, time, price, size, exchangeCode
+                # La hora viene en MILISEGUNDOS; el resto de la app la espera en
+                # segundos. Si por lo que sea no viene, se usa la de ahora.
+                ms = _num(v[2])
+                cuando = ms / 1000.0 if ms > 0 else time.time()
+                precio, cant = _num(v[3]), _num(v[4])
+                if precio <= 0:
+                    return
+                # OJO con el tamaño: ~1 de cada 3 prints es FRACCIONARIO (compras de
+                # retail por monto en dolares, ej. 0.00329 acciones de AAPL). Son
+                # operaciones reales, asi que se pasan tal cual y NO se redondean a
+                # cero, que seria mentir sobre lo que se opero.
+                self._on_trade(sym, precio, cant, str(v[5] or "").strip(), cuando)
         except Exception:  # noqa: BLE001
             pass          # un evento raro no corta el stream

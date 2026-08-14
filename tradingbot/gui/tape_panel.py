@@ -50,6 +50,22 @@ EXCHANGES = {
 }
 
 
+def _cant(c) -> str:
+    """Como se escribe la cantidad de una operacion.
+
+    La mayoria son acciones enteras, pero con el feed de Tastytrade ~1 de cada 3
+    prints es FRACCIONARIO (compras de retail por monto en dolares: 0,00329 de
+    AAPL, 0,10266 de TSLA). Redondear a entero mostraria "0" en esos casos, que
+    seria mentir sobre lo que se opero. Se muestran con los decimales justos."""
+    try:
+        c = float(c)
+    except (TypeError, ValueError):
+        return "-"
+    if c == int(c):
+        return f"{int(c)}"
+    return f"{c:.4f}".rstrip("0").rstrip(".")
+
+
 class TapePanel(QWidget):
     MAX_FILAS = 500      # cuantas operaciones quedan a la vista
     INTERVALO_MS = 150   # cada cuanto se vuelcan a la tabla (en lote)
@@ -142,7 +158,7 @@ class TapePanel(QWidget):
             self.tabla.insertRow(0)
             self._set(0, C_HORA, self._hora(epoch), color)
             self._set(0, C_PRECIO, f"{precio:.2f}", color)
-            self._set(0, C_CANT, f"{int(cant)}", color)
+            self._set(0, C_CANT, _cant(cant), color)
             it = self._set(0, C_EXCH, str(exch), color)
             if exch in EXCHANGES:
                 it.setToolTip(EXCHANGES[exch])
