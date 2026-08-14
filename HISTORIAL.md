@@ -64,6 +64,7 @@
 | **09-11/08** | Ventana de inicio nueva. **Tastytrade completo** (sandbox + producción). **Hallazgo de los odd lots.** |
 | **12-13/08** | Se descubre que el streaming de Tasty **es solo Nasdaq**. Redes de diagnóstico para los crashes. Avisos de cuenta de Tasty. Sonidos. |
 | **14/08 02:27** | Última conversación, cortada por el crash de la app de escritorio. |
+| **14/08** | Se destila este documento. **El ladder queda terminado**: dibujo optimista (paso 2) y órdenes verdes/rojas según el lado. |
 
 ---
 
@@ -99,6 +100,7 @@
 - **Con el mouse sobre la escalera, los precios quedan clavados en su fila** (idea de Mariano). El problema real era peor de lo que parecía: al moverse el precio **cambiaba qué precio estaba en cada fila**, así que se mandaban órdenes a precios equivocados. Se siguen actualizando el BID/ASK grande, los tamaños y las órdenes: se protege el click sin operar a ciegas.
 - **Memoria de la interfaz**: anchos y orden de columnas de las 6 tablas, anchos de las secciones, tema, botones de cantidad y los dos tildes de avisos. **Los parámetros de trading NO se recuerdan a propósito** — que reaparezcan solos sería peligroso.
 - **Los carteles y botones del ladder van SIEMPRE con el NBBO real**, nunca con el precio de un odd lot.
+- **Dibujo optimista** (14/08): la orden se pinta apenas hacés clic, sin esperar al broker. **Lo no confirmado se ve distinto y no se puede clickear ni arrastrar**: gris `25 ...` enviada, ámbar `25 ->` moviéndose, gris `25 x?` cancelándose, rojo `25 !` rechazada. **Cancelar no borra la orden de la escalera a propósito** — hasta que el broker confirme sigue viva, y hacerte creer lo contrario es el error peligroso. Si el broker no contesta en 10 s, el dibujo provisorio **se borra solo** y avisa. Las confirmadas van **verdes las compras y rojas las ventas**.
 
 ---
 
@@ -220,8 +222,6 @@ Están acá porque las lecciones son de método, no de código:
 ## 9. Cosas que quedaron abiertas
 
 **Trabajo pendiente:**
-- **Paso 2 del ladder ("la ferrari")**: dibujo optimista — la orden aparece al instante en **gris**, pasa a color pleno al confirmarse, y el rechazo se canta fuerte. El paso 1 (sacar las llamadas del hilo de la pantalla) ya está hecho. **Regla no negociable: lo no confirmado se tiene que ver distinto.**
-- **Colores de las órdenes definitivas en el ladder**: verde las compras, rojo las ventas/ventas en corto. Hoy son todas azules.
 - **Foro de Medved / Schwab**: investigación a medias (el foro bloquea la lectura directa, 403).
 - **Repetir con mercado abierto** la medición de los tres filtros de streaming contra el NBBO real.
 - **Perfil "Tasty + datos de Alpaca"** — ofrecido, sin respuesta. Sería sencillo y mejoraría mucho el TAS y el filtro de volumen.
