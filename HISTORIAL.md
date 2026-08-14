@@ -129,6 +129,16 @@
 | **Tastytrade** DXLink | ~64 (**capado a ~2/s por símbolo**) | **NO — solo Nasdaq** | **SÍ** |
 
 - **El volumen del día de Tradier SÍ es correcto** (66.811.269 vs 67.002.681 de Alpaca en SPY): lo toma de la cinta consolidada, no de sus prints. El muestreo afecta solo al TAS.
+
+**Los filtros de streaming, medidos con mercado abierto (14/08).** Cambios de precio en 90 s, alimentando el observador real del bot con cada feed:
+
+| | Tasty | Tradier | Alpaca SIP |
+|---|---|---|---|
+| AAPL (bid / ask) | 70 / 62 | 110 / 118 | **344 / 583** |
+| TSLA (bid / ask) | 105 / 107 | 222 / 252 | **1.274 / 1.625** |
+
+**Tradier también viene muestreado en los quotes** (3-6× menos que Alpaca SIP), no solo en los prints. **Solo Alpaca SIP mide bien estos filtros.** Con Tasty el recorte es de 5 a 12×.
+Consecuencia: los tres filtros de "últimos X segundos" **filtran de MENOS** con Tasty y con Tradier, y los valores calibrados con un feed no sirven para otro. *(Corrección: el 12/08 predije que con Tasty "max cambios" filtraría de MÁS por el parpadeo de los odd lots. Medido, es al revés: el tope de ~2 eventos/segundo pesa mucho más.)*
 - **El feed gratuito de Alpaca (IEX) no sirve para calcular órdenes**: da bid/ask disparatados (MU 868,53 × 940,00 contra 915,76 × 916,40 real) y a veces ask en 0,00. Además casi no manda quotes (0 en 30 s con mercado abierto).
 - **Tradier no tiene overnight**; sus precios se congelan a las 20:00 ET. Alpaca sí, por el feed `boats` (Blue Ocean ATS, **20:00–04:00 ET, domingo a jueves**).
 
@@ -223,7 +233,6 @@ Están acá porque las lecciones son de método, no de código:
 
 **Trabajo pendiente:**
 - **Foro de Medved / Schwab**: investigación a medias (el foro bloquea la lectura directa, 403).
-- **Repetir con mercado abierto** la medición de los tres filtros de streaming contra el NBBO real.
 - **Perfil "Tasty + datos de Alpaca"** — ofrecido, sin respuesta. Sería sencillo y mejoraría mucho el TAS y el filtro de volumen.
 - **Los dos streamings** (NBBO de Alpaca + odd lots de Tasty) — diseñado y evaluado, sin implementar.
 - **Filtro de odd lots del bot** — especificado en detalle por el usuario (ver `LISTA_DE_DESEOS.md`), sin implementar.
