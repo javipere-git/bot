@@ -85,7 +85,15 @@ _CLAROS = {
     "verde_col": QColor("#eaf6ea"),  # resto de la columna de compra (sombreado suave)
     "rojo_col": QColor("#fbeceb"),   # resto de la columna de venta
     "fondo_ladder": QColor("#ffffff"),
-    "azul": QColor("#cfe0f5"),       # mis ordenes
+    "azul": QColor("#cfe0f5"),       # mis ordenes (en desuso: ahora van por lado)
+    # Mis ordenes en el ladder, POR ESTADO. La regla que no se negocia: lo que el
+    # broker todavia no confirmo NUNCA se ve igual que lo confirmado.
+    "orden_buy": QColor("#2e8b57"),        # confirmada, compra
+    "orden_sell": QColor("#c0392b"),       # confirmada, venta / venta en corto
+    "orden_pendiente": QColor("#9aa0a6"),  # enviada, sin confirmar todavia
+    "orden_moviendo": QColor("#e8820c"),   # arrastrada, esperando confirmacion
+    "orden_rechazada": QColor("#ff1744"),  # el broker la rechazo (destello)
+    "orden_texto": QColor("#ffffff"),      # sobre esos tonos saturados, letra blanca
     "amarillo": QColor("#ffe08a"),   # precio promedio
     "texto": QColor("#111111"),      # sobre esos pasteles, letra oscura
     "texto_best": QColor("#111111"),
@@ -108,7 +116,13 @@ _OSCUROS = {
     "verde_col": QColor("#183a26"),  # resto de la columna: sombreado tenue
     "rojo_col": QColor("#3a1d22"),
     "fondo_ladder": QColor("#33363a"),   # menos negro que el resto de la app
-    "azul": QColor("#2b5f96"),
+    "azul": QColor("#2b5f96"),       # (en desuso: ahora las ordenes van por lado)
+    "orden_buy": QColor("#1f8a45"),        # confirmada, compra
+    "orden_sell": QColor("#b52b39"),       # confirmada, venta / venta en corto
+    "orden_pendiente": QColor("#5f666e"),  # enviada, sin confirmar todavia
+    "orden_moviendo": QColor("#c8760f"),   # arrastrada, esperando confirmacion
+    "orden_rechazada": QColor("#ff2d4a"),  # el broker la rechazo (destello)
+    "orden_texto": QColor("#ffffff"),
     "amarillo": QColor("#8a6b1e"),
     "texto": QColor("#f2f2f2"),      # sobre esos tonos, letra clara
     "texto_best": QColor("#0e1a12"),  # sobre el verde/rojo chillon, letra oscura

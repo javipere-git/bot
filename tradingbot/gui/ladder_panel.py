@@ -129,10 +129,10 @@ class LadderPanel(QWidget):
 
     # Pedidos al hilo que habla con el broker (ver ladder_worker.py). Van por
     # conexion EN COLA: el click vuelve al instante y las llamadas salen en orden.
-    pedir_mandar = Signal(object, str, int, float, bool)   # side, symbol, qty, precio, ext
-    pedir_mover = Signal(object, float)                    # [(id, duracion)], precio
-    pedir_cancelar = Signal(object)                        # [ids]
-    pedir_cancelar_todas = Signal()
+    pedir_mandar = Signal(str, object, str, int, float, bool)  # clave, side, sym, qty, precio, ext
+    pedir_mover = Signal(str, object, float)                   # clave, [(id, duracion)], precio
+    pedir_cancelar = Signal(str, object)                       # clave, [ids]
+    pedir_cancelar_todas = Signal(str)                         # clave
 
     def __init__(
         self,
@@ -158,6 +158,8 @@ class LadderPanel(QWidget):
         self._stream_odd = None    # funcion que dice si el streaming trae odd lots
         self._nbbo_rest = None     # NBBO real (lotes redondos), leido por REST
         self._ancla = None      # (top_lvl, bot_lvl, paso) fijado mientras esta congelada
+        self._pend = {}         # dibujo optimista: clave -> accion en vuelo (ver abajo)
+        self._n_clave = 0       # contador para claves unicas
 
         lay = QVBoxLayout(self)
         lay.setContentsMargins(6, 6, 6, 6)
@@ -335,6 +337,7 @@ class LadderPanel(QWidget):
             # escribiria en el widget DESDE EL HILO DEL BROKER -> tocar la interfaz
             # fuera de su hilo tumba la app.
             self._worker.log.connect(self._log_del_worker)
+            self._worker.resultado.connect(self._resultado_del_worker)
             # conexiones EN COLA (cruzan de hilo): se ejecutan en orden y de a una
             self.pedir_mandar.connect(self._worker.mandar)
             self.pedir_mover.connect(self._worker.mover)
@@ -351,6 +354,118 @@ class LadderPanel(QWidget):
         """Recibe los avisos del hilo del broker YA en el hilo de la pantalla."""
         self._log(mensaje)
 
+    # ---------- dibujo optimista ----------
+    # Antes, una orden aparecia en la escalera recien cuando el broker la confirmaba
+    # Y ademas la volviamos a leer: entre 0,6 y 1 segundo, y hasta 4 si el broker no
+    # tiene avisos de cuenta. Ahora se dibuja apenas haces click.
+    #
+    # LA REGLA QUE NO SE NEGOCIA: lo que el broker todavia no confirmo se ve DISTINTO
+    # (gris o ambar, nunca del color de una confirmada) y no se puede clickear. En una
+    # app de trading, mostrar como real algo que el broker no acepto es peligroso.
+    #
+    # Y no cuesta llamadas: al contrario, evita tener que releer las ordenes despues
+    # de cada accion.
+    TTL_PEND = 10.0      # segundos: si el broker no contesta, se borra el dibujo
+    DESTELLO = 1.5       # segundos que queda visible una rechazada
+
+    def _clave_nueva(self) -> str:
+        self._n_clave += 1
+        return f"p{self._n_clave}"
+
+    def _pend_agregar(self, datos: dict) -> str:
+        """Anota una accion en vuelo y repinta YA (no espera al throttle: esto es
+        respuesta a un click tuyo, tiene que verse al instante)."""
+        clave = self._clave_nueva()
+        datos["estado"] = "en_vuelo"
+        datos["t"] = time.monotonic()
+        datos["t_fin"] = None
+        self._pend[clave] = datos
+        self._repoblar()
+        return clave
+
+    @Slot(str, bool, str)
+    def _resultado_del_worker(self, clave: str, ok: bool, id_real: str) -> None:
+        """Llega en el hilo de la pantalla. Confirma o revierte lo que se dibujo."""
+        # "Cancelar todo" dibuja una marca por orden pero recibe un solo resultado:
+        # las hermanas se resuelven junto con la primera.
+        for otra, dd in list(self._pend.items()):
+            if dd.get("hermana_de") == clave:
+                self._resultado_del_worker(otra, ok, "")
+        d = self._pend.get(clave)
+        if d is None:
+            return
+        if ok:
+            d["estado"] = "confirmada"
+            d["id_real"] = id_real or None
+            d["t"] = time.monotonic()      # el reloj del TTL arranca de nuevo
+        else:
+            # REVERSION VISIBLE: destello rojo y despues desaparece. Que un rechazo
+            # se cante fuerte es la contracara de dibujar antes de tiempo.
+            d["estado"] = "rechazada"
+            d["t_fin"] = time.monotonic() + self.DESTELLO
+        self._repoblar()
+
+    def _reconciliar(self) -> None:
+        """Saca los dibujos que ya no hacen falta: o porque la orden de verdad llego
+        (y entonces la pinta el camino normal), o porque paso demasiado tiempo."""
+        if not self._pend:
+            return
+        ahora = time.monotonic()
+        reales = {str(o.id) for o in self._orders}
+        for clave in list(self._pend):
+            d = self._pend[clave]
+            if d["t_fin"] is not None and ahora >= d["t_fin"]:
+                del self._pend[clave]
+                continue
+            if d["estado"] == "rechazada":
+                continue                    # sigue destellando hasta su t_fin
+            if ahora - d["t"] > self.TTL_PEND:
+                # Nunca dejar un dibujo colgado: si el broker no contesto en 10s, se
+                # borra y se avisa. Mejor no mostrar nada que mostrar un fantasma.
+                del self._pend[clave]
+                self._log("Ladder: sin confirmacion del broker; saco el dibujo "
+                          "provisorio (mira las ordenes abiertas).")
+                continue
+            if d["estado"] != "confirmada":
+                continue
+            # confirmada: se borra el dibujo cuando el dato REAL ya refleja la accion
+            if d["tipo"] == "nueva":
+                if d.get("id_real") and str(d["id_real"]) in reales:
+                    del self._pend[clave]
+            elif d["tipo"] == "cancelar":
+                if not any(str(i) in reales for i in d["ids"]):
+                    del self._pend[clave]
+            elif d["tipo"] == "mover":
+                movidas = [o for o in self._orders
+                           if str(o.id) in {str(i) for i in d["ids"]}]
+                if movidas and all(o.price and abs(o.price - d["precio"]) < 0.005
+                                   for o in movidas):
+                    del self._pend[clave]
+                elif not movidas:
+                    del self._pend[clave]   # el broker le cambio el id (Alpaca/Tasty)
+
+    def _pend_dibujo(self, step_c: int):
+        """Devuelve (por_nivel, ocultos) para mezclar con las ordenes reales.
+        `ocultos` son los ids que NO se pintan en su lugar de siempre porque hay una
+        accion en vuelo sobre ellos (se los dibuja aparte, con su estado)."""
+        por_nivel, ocultos = {}, set()
+        for d in self._pend.values():
+            for i in d.get("ids", []):
+                ocultos.add(str(i))
+            precio = d.get("precio")
+            if precio is None:
+                continue
+            estado = {"cancelar": "cancelando", "mover": "moviendo"}.get(
+                d["tipo"], "nueva")
+            if d["estado"] == "rechazada":
+                estado = "rechazada"
+            lvl = round(round(precio * 100) / step_c)
+            clave = (lvl, bool(d["compra"]))
+            qty_previa = por_nivel[clave][0] if clave in por_nivel else 0
+            por_nivel[clave] = (qty_previa + int(d.get("qty", 0) or 0), estado,
+                                d.get("origen"))
+        return por_nivel, ocultos
+
     def detener(self) -> None:
         """La ventana lo llama al cerrar: corta el hilo con prolijidad."""
         if getattr(self, "_hilo", None) is not None:
@@ -366,6 +481,7 @@ class LadderPanel(QWidget):
             return
         self._symbol = sym
         self.ed_symbol.setText(sym)
+        self._pend = {}         # los dibujos provisorios eran del simbolo anterior
         self._orders = []
         self._avg = None
         self._pos_qty = 0
@@ -499,6 +615,10 @@ class LadderPanel(QWidget):
 
     def _repintar(self) -> None:
         """Repinta la escalera si hay datos nuevos. Lo llama el timer cada 150 ms."""
+        if self._pend:
+            # mientras haya ordenes en vuelo hay que seguir repintando aunque el
+            # mercado este quieto: es lo que hace avanzar el destello y el vencimiento
+            self._pendiente = True
         if not self._pendiente:
             return
         self._pendiente = False
@@ -584,16 +704,26 @@ class LadderPanel(QWidget):
             self._ayuda.setText("Spread muy grande: aleja con el zoom (-).")
             return
 
-        # mapas nivel -> (ids, qty) de mis ordenes
+        # mapas nivel -> (ids, qty, estado) de mis ordenes.
+        # estado None = confirmada por el broker; cualquier otro = en vuelo, y se
+        # dibuja distinto y sin poder clickearla.
+        self._reconciliar()
+        pend_lvl, ocultos = self._pend_dibujo(step_c)
         buy_lvl, sell_lvl = {}, {}
         for o in self._orders:
-            if not o.price:
+            if not o.price or str(o.id) in ocultos:
                 continue
             lvl = round(round(o.price * 100) / step_c)
             destino = buy_lvl if o.side in _BUY_SIDES else sell_lvl
-            ids, qty = destino.get(lvl, ([], 0))
+            ids, qty, _ = destino.get(lvl, ([], 0, None))
             ids.append(o.id)
-            destino[lvl] = (ids, qty + o.quantity)
+            destino[lvl] = (ids, qty + o.quantity, None)
+        for (lvl, es_compra), (qty, estado, origen) in pend_lvl.items():
+            destino = buy_lvl if es_compra else sell_lvl
+            ids_previos, qty_previa, _ = destino.get(lvl, ([], 0, None))
+            # Si en la misma celda conviven una confirmada y una en vuelo, manda el
+            # estado EN VUELO: ante la duda, se muestra lo menos seguro.
+            destino[lvl] = ([], qty_previa + qty, (estado, origen))
 
         avg_lvl = round(round(self._avg * 100) / step_c) if self._avg else None
 
@@ -666,12 +796,37 @@ class LadderPanel(QWidget):
         if datos is None:
             self._set(row, col, "")
             return
-        ids, qty = datos
-        it = QTableWidgetItem(f"{qty}   [X]")
+        ids, qty, marca = datos
+        if marca is None:
+            # CONFIRMADA por el broker: verde si es compra, rojo si es venta o venta
+            # en corto. Es la unica que se puede cancelar o arrastrar.
+            texto = f"{qty}   [X]"
+            fondo = colores("orden_buy" if col == C_BUY else "orden_sell")
+            ayuda = "Click para cancelar esta orden · arrastrala para moverla"
+            estado = None
+        else:
+            estado, origen = marca
+            fondo, texto, ayuda = {
+                "nueva": (colores("orden_pendiente"), f"{qty}  ...",
+                          "Enviada, esperando confirmacion del broker"),
+                "moviendo": (colores("orden_moviendo"), f"{qty}  ->",
+                             f"Moviendose desde {origen:.2f}, sin confirmar"
+                             if origen else "Moviendose, sin confirmar"),
+                "cancelando": (colores("orden_pendiente"), f"{qty}  x?",
+                               "Cancelacion enviada: TODAVIA ESTA VIVA hasta que el "
+                               "broker confirme"),
+                "rechazada": (colores("orden_rechazada"), f"{qty}  !",
+                              "EL BROKER LA RECHAZO"),
+            }[estado]
+        it = QTableWidgetItem(texto)
         it.setTextAlignment(Qt.AlignCenter)
-        it.setToolTip("Click para cancelar esta orden")
-        it.setBackground(QBrush(colores("azul")))
-        it.setData(Qt.UserRole, ids)
+        it.setToolTip(ayuda)
+        it.setBackground(QBrush(fondo))
+        it.setForeground(QBrush(colores("orden_texto")))
+        if estado is None:
+            it.setData(Qt.UserRole, ids)     # solo las confirmadas son clickeables
+        else:
+            it.setData(Qt.UserRole + 1, estado)
         self.tabla.setItem(row, col, it)
 
     # ---------- operar ----------
@@ -695,6 +850,10 @@ class LadderPanel(QWidget):
             ids = it.data(Qt.UserRole) if it is not None else None
             if ids:
                 self._cancelar(ids)
+            elif it is not None and it.data(Qt.UserRole + 1):
+                # es un dibujo provisorio: sin confirmar no se puede operar sobre el
+                self._log("Ladder: esa orden todavia no esta confirmada por el "
+                          "broker; espera un segundo.")
             return                      # esas columnas YA NO mandan ordenes
         if col in (C_BID, C_ASK):
             precio = self._precio_de_fila(row)
@@ -832,8 +991,13 @@ class LadderPanel(QWidget):
         if not self._venta_permitida(broker, side, qty):
             return
         ext = self.chk_ext.isChecked()
+        # se dibuja YA, en gris, y el resultado del broker la confirma o la borra
+        clave = self._pend_agregar({
+            "tipo": "nueva", "compra": side in _BUY_SIDES,
+            "qty": qty, "precio": round(precio, 2), "ids": [],
+        })
         if self._worker is not None:
-            self.pedir_mandar.emit(side, self._symbol, qty, round(precio, 2), ext)
+            self.pedir_mandar.emit(clave, side, self._symbol, qty, round(precio, 2), ext)
             return
         try:                                        # sin hilo: camino directo
             orden = broker.place_order(
@@ -842,23 +1006,43 @@ class LadderPanel(QWidget):
             )
             self._log(f"Ladder: {side.value} {qty} {self._symbol} @ {precio:.2f} "
                       f"enviada (id {orden.id}).")
+            self._resultado_del_worker(clave, True, str(orden.id))
         except Exception as e:  # noqa: BLE001
             self._log(f"*** Ladder: no se pudo mandar la orden ({e}) ***")
+            self._resultado_del_worker(clave, False, "")
 
     def _cancelar(self, ids) -> None:
         broker = self._broker()
         if broker is None:
             self._log("Ladder: no hay conexion para operar.")
             return
+        # Se marca en gris como "cancelando", NO se borra de la escalera. A proposito:
+        # hasta que el broker confirme, esa orden SIGUE VIVA, y hacerte creer que ya
+        # no esta es justo el error peligroso en una app de trading.
+        clave = self._pend_agregar(self._marca_cancelacion(ids))
         if self._worker is not None:
-            self.pedir_cancelar.emit(list(ids))
+            self.pedir_cancelar.emit(clave, list(ids))
             return
+        ok = True
         for oid in ids:                             # sin hilo: camino directo
             try:
                 broker.cancel_order(oid)
                 self._log(f"Ladder: orden {oid} cancelada.")
             except Exception as e:  # noqa: BLE001
                 self._log(f"Ladder: error al cancelar ({e})")
+                ok = False
+        self._resultado_del_worker(clave, ok, "")
+
+    def _marca_cancelacion(self, ids) -> dict:
+        """Arma el dibujo provisorio de una cancelacion, con los datos de las ordenes
+        que la pantalla ya tiene cargadas (no se le pregunta nada al broker)."""
+        buscadas = {str(i) for i in ids}
+        afectadas = [o for o in self._orders if str(o.id) in buscadas]
+        qty = sum(o.quantity for o in afectadas)
+        precio = next((o.price for o in afectadas if o.price), None)
+        compra = bool(afectadas) and afectadas[0].side in _BUY_SIDES
+        return {"tipo": "cancelar", "compra": compra, "qty": qty,
+                "precio": precio, "ids": list(ids)}
 
     def _cancelar_todas(self) -> None:
         broker = self._broker()
@@ -867,8 +1051,15 @@ class LadderPanel(QWidget):
             return
         if self._worker is not None:
             # esta es la mas pesada de todas (lee TODAS las ordenes del dia): sacarla
-            # del hilo de la pantalla es justamente lo que evita el tiron mas largo
-            self.pedir_cancelar_todas.emit()
+            # del hilo de la pantalla es justamente lo que evita el tiron mas largo.
+            # Se marcan en gris las del simbolo visible; las de otros simbolos no se
+            # ven en esta escalera, asi que no hay nada que dibujar.
+            claves = [self._pend_agregar(self._marca_cancelacion([o.id]))
+                      for o in self._orders if o.price]
+            clave = claves[0] if claves else self._clave_nueva()
+            for extra in claves[1:]:
+                self._pend[extra]["hermana_de"] = clave
+            self.pedir_cancelar_todas.emit(clave)
             return
         try:                                        # sin hilo: camino directo
             abiertas = broker.get_open_orders()
@@ -898,16 +1089,30 @@ class LadderPanel(QWidget):
         # La duracion de cada orden se resuelve ACA, con las ordenes que la pantalla ya
         # tiene cargadas (el hilo no toca datos de la pantalla). Se respeta la que YA
         # tiene: si es de horario extendido (pre/post) y se manda "day", la rechazan.
-        pares = []
+        pares, afectadas = [], []
         for oid in ids:
             orden = next((o for o in self._orders if str(o.id) == str(oid)), None)
             pares.append((oid, getattr(orden, "duration", None)))
+            if orden is not None:
+                afectadas.append(orden)
+        # el marcador salta al precio nuevo al instante, en ambar; si el broker la
+        # rechaza, vuelve a su lugar con un destello rojo
+        clave = self._pend_agregar({
+            "tipo": "mover",
+            "compra": bool(afectadas) and afectadas[0].side in _BUY_SIDES,
+            "qty": sum(o.quantity for o in afectadas),
+            "precio": round(nuevo, 2), "ids": list(ids),
+            "origen": next((o.price for o in afectadas if o.price), None),
+        })
         if self._worker is not None:
-            self.pedir_mover.emit(pares, round(nuevo, 2))
+            self.pedir_mover.emit(clave, pares, round(nuevo, 2))
             return
+        ok = True
         for oid, dur in pares:                      # sin hilo: camino directo
             try:
                 broker.modify_order(oid, price=round(nuevo, 2), duration=dur)
                 self._log(f"Ladder: orden {oid} movida a {nuevo:.2f}.")
             except Exception as e:  # noqa: BLE001
                 self._log(f"Ladder: no se pudo mover ({e})")
+                ok = False
+        self._resultado_del_worker(clave, ok, "")
