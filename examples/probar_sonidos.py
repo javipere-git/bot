@@ -22,8 +22,25 @@ def main() -> int:
     print("=" * 66)
     resultados = {}
 
+    # ---------- 0) los archivos propios (lo que usa la app AHORA) ----------
+    print("\n0) ARCHIVOS PROPIOS DE LA APP (esto es lo que vas a escuchar al operar)")
+    try:
+        from tradingbot.gui.sonidos import ARCHIVO_ALERTA, ARCHIVO_EJECUCION
+        for nombre, ruta in (("orden ejecutada", ARCHIVO_EJECUCION),
+                             ("ALARMA del guardia", ARCHIVO_ALERTA)):
+            existe = os.path.exists(ruta)
+            print(f"   {nombre:20} archivo {'OK' if existe else 'FALTA'}: {ruta}")
+            if existe:
+                import winsound
+                winsound.PlaySound(ruta, winsound.SND_FILENAME)   # espera a que termine
+                time.sleep(0.4)
+        resultados["archivos propios"] = "se tocaron"
+    except Exception as e:  # noqa: BLE001
+        resultados["archivos propios"] = f"FALLO: {e}"
+        print(f"   *** fallo: {e}")
+
     # ---------- 1) sonido del sistema ----------
-    print("\n1) SONIDO DEL SISTEMA (el que usa el esquema de Windows)")
+    print("\n1) SONIDO DEL SISTEMA (respaldo, el del esquema de Windows)")
     print("   ... deberias escuchar DOS sonidos, uno tras otro")
     try:
         import winsound
