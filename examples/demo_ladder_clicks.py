@@ -178,7 +178,13 @@ def main() -> None:
     todo = ok1 and ok2 and ok3 and ok4 and ok5 and ok6
     print("OK: mandar por bid/ask, cancelar en tu orden, botones configurables."
           if todo else "*** HAY FALLOS.")
+    return todo
 
 
 if __name__ == "__main__":
-    main()
+    # os._exit evita un choque de Qt al desarmar la aplicacion, que hacia que
+    # el script terminara con codigo de error (127) aunque todas las pruebas
+    # pasaran. Sin esto, un fallo REAL queda tapado por ese ruido.
+    _ok = main()
+    sys.stdout.flush()
+    os._exit(0 if _ok else 1)

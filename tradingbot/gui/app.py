@@ -11,6 +11,7 @@ from PySide6.QtWidgets import QApplication, QMessageBox
 
 from .main_window import MainWindow
 from .perfiles import perfiles_disponibles
+from .recolector import proteger as proteger_recolector
 from .startup import StartupDialog
 from ..registro import (
     activar_faulthandler,
@@ -84,6 +85,10 @@ def _main() -> int:
             + choque_previo)
         log(f"*** (el archivo de choques es {ruta_choques(perfil.id)}) ***")
 
+    # ANTES de crear la ventana y los hilos: que el recolector de basura no corra
+    # nunca dentro de un hilo de trabajo (ver gui/recolector.py). Sin esto, la app
+    # se cierra sola de golpe cada tanto, sin dejar traza.
+    proteger_recolector(app)
     rastro_arranque("8. creando la ventana principal")
     win = MainWindow(perfil)
     rastro_arranque("9. ventana creada, mostrando")

@@ -96,7 +96,13 @@ def main() -> None:
     todo = ok1 and ok2 and ok3 and ok4
     print("OK: el congelado protege el click y no deja la escalera pegada."
           if todo else "*** HAY FALLOS.")
+    return todo
 
 
 if __name__ == "__main__":
-    main()
+    # os._exit evita un choque de Qt al desarmar la aplicacion, que hacia que
+    # el script terminara con codigo de error (127) aunque todas las pruebas
+    # pasaran. Sin esto, un fallo REAL queda tapado por ese ruido.
+    _ok = main()
+    sys.stdout.flush()
+    os._exit(0 if _ok else 1)
