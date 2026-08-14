@@ -35,11 +35,13 @@ from __future__ import annotations
 
 import threading
 import time
+from datetime import timedelta
 from typing import Callable
 
 import requests
 
 from ..core.broker import Broker
+from ..core.horarios import ahora_et, inicio_dia_operativo
 from ..core.models import (
     DayPnL,
     Duration,
@@ -331,6 +333,18 @@ class TastytradeBroker(Broker):
     ORDENES_POR_PAGINA = 200
     MAX_PAGINAS = 25            # salvavidas: hasta 5.000 ordenes en el dia
 
+    def _desde_hoy(self) -> str:
+        """Corte para pedirle a Tasty SOLO las ordenes del dia operativo en curso.
+
+        Tasty, como Alpaca, NO filtra por dia: devuelve el historico entero. Medido
+        el 14/08/2026 en la cuenta real: sin filtro daba **1.881** ordenes (1.593 de
+        ayer) y con el filtro **288**. Sin esto, las tablas se llenan de ordenes
+        viejas y, como se ordenan por hora, las de ayer quedan arriba de todo.
+
+        El corte son las 04:00 ET (ver inicio_dia_operativo): a medianoche escondria
+        el overnight, que es la continuacion del dia que ya venia corriendo."""
+        return inicio_dia_operativo().strftime("%Y-%m-%dT%H:%M:%SZ")
+
     def get_orders(self, limit: int | None = None) -> list[Order]:
         """Ordenes del dia (vivas + cerradas), de la MAS NUEVA a la mas vieja.
 
@@ -345,7 +359,8 @@ class TastytradeBroker(Broker):
             js = self._pedir(
                 "GET", f"/accounts/{self._account}/orders",
                 params={"per-page": min(self.ORDENES_POR_PAGINA, max(1, faltan)),
-                        "page-offset": pagina, "sort": "Desc"},
+                        "page-offset": pagina, "sort": "Desc",
+                        "start-at": self._desde_hoy()},
                 timeout=40,
             )
             items = js.get("data", {}).get("items", [])
@@ -442,11 +457,19 @@ class TastytradeBroker(Broker):
         costo_abierto = sum(p.avg_price * p.quantity for p in posiciones)
 
         realizado = None
-        if d.get("intraday-equities-cash-amount") is not None:
+        if (d.get("intraday-equities-cash-amount") is not None
+                and self._es_de_hoy(d.get("intraday-equities-cash-effective-date"))):
             monto = _f(d.get("intraday-equities-cash-amount"))
             if str(d.get("intraday-equities-cash-effect", "")).lower() == "debit":
                 monto = -monto
             realizado = monto + costo_abierto
+        elif d.get("intraday-equities-cash-amount") is not None:
+            # El campo trae el de la sesion ANTERIOR: Tasty no lo pone en cero al
+            # empezar el dia, lo actualiza recien con el primer movimiento. Si no se
+            # mira su fecha, a la mañana se muestra el resultado de AYER como si
+            # fuera el de hoy (pasa hasta que operas, y ahi "se acomoda" solo).
+            # Sin actividad todavia, el realizado del dia es cero.
+            realizado = 0.0
 
         if realizado is None:                      # respaldo: el metodo viejo
             equivalente = _f(d.get("cash-balance")) + costo_abierto
@@ -456,6 +479,26 @@ class TastytradeBroker(Broker):
 
         return DayPnL(realizado=round(realizado, 4),
                       no_realizado=round(self._no_realizado(posiciones), 4))
+
+    @staticmethod
+    def _es_de_hoy(fecha) -> bool:
+        """La fecha efectiva del campo (AAAA-MM-DD) es la del dia operativo en curso?
+
+        Se compara contra la fecha en NUEVA YORK, no la de la PC: a la madrugada
+        argentina (que en NY todavia es el dia anterior) la fecha local ya cambio y
+        el campo quedaria mal descartado.
+
+        Sin zona horaria disponible se responde True: en el peor caso se muestra un
+        numero de mas, que es preferible a esconder el resultado del dia."""
+        if not fecha:
+            return False
+        t = ahora_et()
+        if t is None:
+            return True
+        # el dia operativo arranca a las 04:00 ET: antes de esa hora seguimos en el
+        # dia anterior (la sesion overnight es continuacion del que venia corriendo)
+        hoy = (t if t.hour >= 4 else t - timedelta(days=1)).strftime("%Y-%m-%d")
+        return str(fecha)[:10] == hoy
 
     def _no_realizado(self, posiciones) -> float:
         """Lo que ganan/pierden las posiciones ABIERTAS al precio de ahora.
