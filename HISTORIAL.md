@@ -246,6 +246,20 @@ Están acá porque las lecciones son de método, no de código:
 - **Pull Request del adaptador de Tradier** en el repo de Mariano — la rama está subida con 7 commits, **el PR sin abrir**.
 - **Mostrar el fill rate en el monitoreo** con aviso al acercarse al 1%.
 
+**Los rechazos de Tastytrade (medido el 14/08, 85 rechazos en un dia):**
+
+| Motivo | Cuantos | Se puede evitar? |
+|---|---|---|
+| Poder de compra insuficiente | 40 | con tamaño por costo, no por cantidad fija |
+| "set to closing only" | ~24 | **si, gratis**: `is-closing-only` en la consulta de instrumentos |
+| Concentration Risk | 4 | limite propio de Tasty por exposicion |
+| Halted / Do Not Trade / OTC | 10 | parcialmente, con la misma consulta |
+
+**Sobre el poder de compra: la sospecha del usuario era correcta.** Tasty **no libera al instante** la plata congelada por una orden cancelada. La secuencia que lo prueba: a las 19:38:05 se cancela QQQP por **$4.541** y a las 19:38:08 —**tres segundos despues**— rechazan QNCX de **$670**, teniendo **$7.334** de poder de compra. Descartado que sea un bug nuestro: **0 ordenes huerfanas**, 1.930 canceladas con duracion tipica de **3 s**.
+El amplificador es el **tamaño fijo**: 20 acciones sobre papeles de $200-330 son ordenes de $4.000-6.600 cada una, con una mediana de **$5.214** contra $7.334 de poder de compra. Es el mismo diagnostico que el del 22/07 con Alpaca ("10 acciones de un papel de $77 son $778 sobre $1.000"). Tasty **no expone** cuanta plata esta congelada; `equity-buying-power` ya viene neto, asi que saberlo cuesta una llamada por simbolo.
+
+**Los prints fraccionarios de Tasty** (medido el 14/08): son **fracciones de accion de verdad**, compras por monto en dolares (0,00329 de AAPL = $1,00; 0,10266 de TSLA = $35,00). **La cinta consolidada NO los trae**: en 4.654 prints de AAPL del SIP, **cero** fraccionarios — el mas chico es 1 accion, con condicion `I` (odd lot) y exchange `D` (FINRA ADF, internalizado). Los prints "en 0" que se ven en Schwab son estos mismos, mostrados sin decimales.
+
 **Preguntas sin responder:**
 - Si Alpaca piensa exponer BOLO / odd lots (hay un hilo en su foro sin responder).
 - Cuántas conexiones simultáneas de datos permite cada broker, y los límites de API de Tastytrade (no publicados).
