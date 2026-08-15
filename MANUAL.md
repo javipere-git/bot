@@ -188,6 +188,33 @@ permite UNA sola conexion de streaming de datos a la vez (con Algo Trader Plus, 
     **no se pueden shortear**: la orden se rechaza. Ademas, si una accion pasa de ETB a
     HTB durante la noche, Alpaca **cancela sola** las ordenes short abiertas antes de
     la apertura.
+- **"Excluidas"** (15/08/2026). Simbolos que el bot **NO va a operar**, aunque esten
+  en la watchlist. Se saltean **al arrancar**, antes de pedir ninguna cotizacion: no
+  cuestan ni una llamada ni una vuelta.
+  - El cuadro tiene **dos listas separadas**, y esa separacion es todo el punto:
+    - **Mias**: las que excluis vos, por el motivo que sea.
+    - **Del broker**: las que el broker tiene **bloqueadas para abrir posicion**. Son
+      cientos y cambian solas, asi que se renuevan con el boton **"Traer del broker"**
+      sin tocar las tuyas.
+  - Se guardan en `config/excluidas.txt`, que **si va al repositorio** (no tiene nada
+    sensible): la misma lista te sigue a las tres PCs.
+  - Medido el 15/08/2026: **Alpaca 863** bloqueadas de 14.234 (`tradable=false`),
+    **Tastytrade 394** de 13.194 (`is-closing-only`: solo dejan CERRAR). Tradier no
+    ofrece esta lista.
+  - **El sandbox de Tasty no marca ninguna**: lista otro universo (24.802
+    instrumentos) con `is-closing-only` en false para todos. Por eso, estando en
+    sandbox, la lista se pide al catalogo de **produccion** (es una lectura del
+    listado de instrumentos: no toca la cuenta ni manda ordenes). Cuando pasa, lo
+    dice en el registro.
+- **"Bajar catalogo"** (15/08/2026). Guarda en un `.csv` (se abre con Excel, separado
+  por `;`) **todo lo que el broker sabe de cada simbolo**: bloqueada para abrir,
+  operable, prestable (ETB), costo de prestamo, iliquida, marca de fraude, bloqueada
+  en la sesion nocturna y mercado. Lo que ese broker **no informa queda vacio**, no
+  en "NO". Sirve para mirarlo con calma y decidir que poner en las excluidas.
+  - Tarda 1,8 s en Alpaca (una llamada) y 7,5 s en Tasty (14 paginas), en otro hilo:
+    la app sigue andando.
+  - **Iliquida (45%) y marca de fraude (27%) NO se usan para bloquear nada**: filtrar
+    por ahi vaciaria cualquier watchlist. Son solo para mirar.
 
 ### Entrada
 - **Cantidad**: acciones por orden.

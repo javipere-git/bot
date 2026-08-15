@@ -119,6 +119,10 @@ class EngineConfig:
     # pierde tiempo en simbolos que igual iban a saltearse, y el precio con el que
     # se entra es fresco (se relee la cotizacion despues de esperar).
     pausa_simbolo_s: float = 0.0
+    # Simbolos que NO se operan, vengan en la watchlist o no (los tuyos + los que el
+    # broker tiene bloqueados). Se sacan de la lista al arrancar la pasada, asi que
+    # no cuestan ni una llamada ni una vuelta. Ver core/excluidas.py.
+    excluidas: set | None = None
 
     # ----- salida (Tanda 2) -----
     exit_levels: list[ExitLevel] = field(default_factory=list)  # hasta 4

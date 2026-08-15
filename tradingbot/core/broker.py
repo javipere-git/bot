@@ -48,6 +48,33 @@ class Broker(ABC):
     def get_order(self, order_id: str) -> Order:
         """Devuelve una orden por su id, con su estado actual (open/filled/...)."""
 
+    def catalogo(self) -> list[dict]:
+        """Todo lo que el broker sabe de cada simbolo que lista, en una pasada.
+
+        Sirve para dos cosas: saber cuales tiene BLOQUEADAS para abrir posicion (y
+        no gastar una orden que va a rechazar), y bajarlo a un archivo para mirarlo
+        con calma.
+
+        Cada fila trae las mismas claves en todos los brokers, con None donde ese
+        broker no informa el dato:
+            symbol, bloqueada, operable, prestable, costo_prestamo,
+            iliquida, marca_fraude, overnight_bloqueada, mercado
+
+        Medido el 15/08/2026: Alpaca paper 14.234 simbolos en 1,8 s (una llamada,
+        863 bloqueadas), Tastytrade produccion 13.194 en 7,5 s (14 paginas, 394
+        bloqueadas). Tradier no lo ofrece.
+
+        Si el conector tuvo que sacar la lista de otro lado que el esperable, lo
+        deja escrito en self.catalogo_origen para que la pantalla lo muestre (le
+        pasa a Tasty: su sandbox no marca ninguna bloqueada).
+
+        Lista vacia = este broker no lo tiene."""
+        return []
+
+    #: explicacion de DONDE salio el ultimo catalogo, cuando no es lo obvio.
+    #: None = del broker al que estas conectado, como corresponde.
+    catalogo_origen: str | None = None
+
     def orden_de_aviso(self, evento) -> tuple[str | None, "OrderStatus | None", Order | None]:
         """Traduce un aviso del canal de cuenta a datos de una orden.
 

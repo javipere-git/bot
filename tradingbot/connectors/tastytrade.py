@@ -543,6 +543,63 @@ class TastytradeBroker(Broker):
             return None
         return None
 
+    def catalogo(self) -> list[dict]:
+        """Todo lo que Tasty sabe de cada instrumento.
+
+        'bloqueada' sale de is-closing-only: solo dejan CERRAR, no abrir.
+
+        OJO CON EL SANDBOX (medido el 15/08/2026): lista OTRO universo, 24.802
+        instrumentos en 15,9 s, y no marca NINGUNO: is-closing-only y is-fraud-risk
+        vienen en false para los 24.802. Produccion, en cambio, lista 13.194 en
+        7,5 s con 394 bloqueadas, 6.004 iliquidas y 3.539 con marca de fraude.
+        Como las bloqueadas de verdad solo estan en produccion, estando en sandbox
+        se piden ahi directamente (y de paso tarda la mitad).
+
+        Las marcas 'iliquida' (45%) y 'marca_fraude' (27%) se informan pero NO
+        bloquean nada: filtrar por ahi vaciaria cualquier watchlist. Quedan para
+        mirarlas en el catalogo."""
+        self.catalogo_origen = None
+        if self._sandbox:
+            # Se pide derecho a PRODUCCION: es el unico lado donde estan marcadas.
+            # Es una lectura del listado de instrumentos: no toca la cuenta, no mira
+            # posiciones y no manda ordenes. Y ademas es MAS RAPIDO (7,5 s contra
+            # 15,9 s del sandbox, que lista el doble de instrumentos inventados).
+            try:
+                prod = TastytradeBroker.from_credentials(environment="production")
+                reales = prod._catalogo_crudo()
+            except Exception:       # noqa: BLE001  sin credenciales de produccion
+                reales = []
+            if reales:
+                self.catalogo_origen = (
+                    "el sandbox no marca ninguna bloqueada, asi que la lista sale "
+                    "del catalogo de PRODUCCION (solo lectura, no toca la cuenta)")
+                return reales
+        return self._catalogo_crudo()
+
+    def _catalogo_crudo(self) -> list[dict]:
+        """Las paginas tal como las manda el entorno al que esta conectado."""
+        filas = []
+        for pagina in range(0, 30):
+            js = self._pedir("GET", "/instruments/equities/active",
+                             params={"per-page": 1000, "page-offset": pagina},
+                             timeout=60)
+            items = js.get("data", {}).get("items", [])
+            if not items:
+                break
+            for i in items:
+                filas.append({
+                    "symbol": str(i.get("symbol", "")).upper(),
+                    "bloqueada": bool(i.get("is-closing-only")),
+                    "operable": bool(i.get("active", True)),
+                    "prestable": str(i.get("lendability") or "") == "Easy To Borrow",
+                    "costo_prestamo": i.get("borrow-rate"),
+                    "iliquida": bool(i.get("is-illiquid")),
+                    "marca_fraude": bool(i.get("is-fraud-risk")),
+                    "overnight_bloqueada": not i.get("overnight-trading-permitted", True),
+                    "mercado": str(i.get("listed-market") or ""),
+                })
+        return filas
+
     def lista_etb(self) -> list[str]:
         """Acciones EASY TO BORROW segun Tasty (campo 'lendability' del instrumento).
 

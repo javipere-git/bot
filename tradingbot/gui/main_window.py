@@ -36,6 +36,7 @@ from .estado_ui import (
     restaurar_splitter,
 )
 from .tema import aplicar_tema, es_oscuro
+from ..core.catalogo import guardar_catalogo
 from ..core.models import OrderStatus, Side
 from ..core.observador_movimiento import ObservadorMovimiento
 from .sonidos import sonar_alerta, sonar_ejecucion
@@ -79,6 +80,14 @@ def _zona(titulo: str, descripcion: str) -> QFrame:
 class _AvisoETB(QObject):
     """Solo transporta el resultado del pedido de la lista ETB desde el hilo que la
     trae hasta la pantalla. No hace el trabajo: lo hace un hilo simple de Python."""
+
+    listo = Signal(object)
+    error = Signal(str)
+
+
+class _AvisoCatalogo(QObject):
+    """Lo mismo, para el catalogo completo del broker (que simbolos tiene bloqueados,
+    prestables, etc.). Es otra clase para que un pedido no pise al otro."""
 
     listo = Signal(object)
     error = Signal(str)
@@ -175,6 +184,8 @@ class MainWindow(QMainWindow):
         self.control.btn_detener.clicked.connect(self._detener)
         self.control.btn_etb_cargar.clicked.connect(lambda: self._lista_etb("cargar"))
         self.control.btn_etb_bajar.clicked.connect(lambda: self._lista_etb("bajar"))
+        self.control.btn_catalogo.clicked.connect(self._bajar_catalogo)
+        self.control.traer_bloqueadas = self._traer_bloqueadas
         self.control.btn_descargar_reporte.clicked.connect(self._abrir_reporte)
         self._set_running(False)
 
@@ -658,6 +669,120 @@ class MainWindow(QMainWindow):
             )
         except Exception as e:  # noqa: BLE001
             self.control.append_log(f"Lista ETB: no se pudo guardar ({e})")
+
+    # ---------- catalogo del broker (excluidas + descarga a Excel) ----------
+    def _pedir_catalogo(self, al_llegar, al_fallar, etiqueta: str) -> None:
+        """Le pide al broker donde se OPERA todo lo que sabe de cada simbolo.
+
+        Es el pedido mas pesado de la app (Tasty son 14 paginas, ~7 s; Alpaca una
+        sola llamada, ~2 s), asi que va en otro hilo si o si. Mismo patron que la
+        lista ETB: hilo simple de Python + señal Qt, y conexion propia para no
+        compartir la del ladder entre hilos.
+        """
+        try:
+            broker = self._perfil.crear_broker()
+        except Exception as e:  # noqa: BLE001
+            self.control.append_log(f"{etiqueta}: no hay conexion con el broker ({e})")
+            al_fallar(str(e))
+            return
+        self.control.append_log(
+            f"{etiqueta}: pidiendole el catalogo a {self._perfil.broker_nombre} "
+            f"(donde operas). Puede tardar unos segundos..."
+        )
+        aviso = _AvisoCatalogo()
+        # va PRIMERO: si el conector tuvo que sacar la lista de otro lado, se lee
+        # antes que nada (el sandbox de Tasty no marca ninguna bloqueada)
+        aviso.listo.connect(lambda _f: self._nota_catalogo(broker, etiqueta))
+        aviso.listo.connect(al_llegar)
+        aviso.error.connect(al_fallar)
+        aviso.error.connect(
+            lambda m: self.control.append_log(f"{etiqueta}: no se pudo traer ({m})")
+        )
+        self._aviso_catalogo = aviso        # referencia (si no, Python lo descarta)
+
+        def _trabajo():
+            try:
+                aviso.listo.emit(broker.catalogo())
+            except Exception as e:  # noqa: BLE001
+                aviso.error.emit(str(e))
+
+        threading.Thread(target=_trabajo, daemon=True).start()
+
+    def _nota_catalogo(self, broker, etiqueta: str) -> None:
+        nota = getattr(broker, "catalogo_origen", None)
+        if nota:
+            self.control.append_log(f"{etiqueta}: {nota}")
+
+    def _traer_bloqueadas(self, dlg) -> None:
+        """Boton 'Traer del broker' del cuadro de excluidas: carga SOLO la seccion
+        del broker con los simbolos que tiene bloqueados para abrir posicion."""
+        nombre = self._perfil.broker_nombre
+        dlg.btn_traer.setEnabled(False)
+        dlg.lbl_estado.setText(f"Preguntandole a {nombre}...")
+
+        def _llego(filas):
+            try:
+                dlg.btn_traer.setEnabled(True)
+                if not filas:
+                    # Tradier no tiene catalogo: mejor no tocar nada que vaciar la lista
+                    dlg.lbl_estado.setText(
+                        f"{nombre} no informa esta lista. No se toco nada.")
+                    return
+                bloqueadas = [f["symbol"] for f in filas if f.get("bloqueada")]
+                dlg.poner_del_broker(bloqueadas)
+                self.control.append_log(
+                    f"Excluidas: {nombre} tiene {len(bloqueadas):,} simbolo(s) "
+                    f"bloqueado(s) de {len(filas):,}. Acordate de guardar."
+                )
+            except RuntimeError:
+                pass        # cerraste el cuadro antes de que llegara la respuesta
+
+        def _fallo(msg):
+            try:
+                dlg.btn_traer.setEnabled(True)
+                dlg.lbl_estado.setText(f"No se pudo traer: {msg}")
+            except RuntimeError:
+                pass
+
+        self._pedir_catalogo(_llego, _fallo, "Excluidas")
+
+    def _bajar_catalogo(self) -> None:
+        """Baja el catalogo completo a un CSV que abre Excel."""
+        # el 'guardar como' va ANTES de arrancar el hilo (abrirlo despues, desde el
+        # manejador de la señal, colgaba la app en Windows)
+        ruta, _ = QFileDialog.getSaveFileName(
+            self, "Guardar el catalogo del broker",
+            f"catalogo_{self._perfil.broker_nombre.lower()}.csv",
+            "CSV para Excel (*.csv)",
+        )
+        if not ruta:
+            self.control.append_log("Catalogo: descarga cancelada.")
+            return
+        self.control.btn_catalogo.setEnabled(False)
+        self._pedir_catalogo(
+            lambda filas: self._catalogo_recibido(filas, ruta),
+            lambda _m: self.control.btn_catalogo.setEnabled(True),
+            "Catalogo",
+        )
+
+    def _catalogo_recibido(self, filas, ruta: str) -> None:
+        self.control.btn_catalogo.setEnabled(True)
+        if not filas:
+            self.control.append_log(
+                f"Catalogo: {self._perfil.broker_nombre} no lo ofrece "
+                f"(Tradier no tiene esta lista)."
+            )
+            return
+        try:
+            guardar_catalogo(filas, ruta)
+        except Exception as e:  # noqa: BLE001
+            self.control.append_log(f"Catalogo: no se pudo guardar ({e})")
+            return
+        bloqueadas = sum(1 for f in filas if f.get("bloqueada"))
+        self.control.append_log(
+            f"Catalogo de {self._perfil.broker_nombre}: {len(filas):,} simbolo(s), "
+            f"{bloqueadas:,} bloqueado(s) para abrir. Guardado en {ruta}"
+        )
 
     def _bot_escaneando(self, valor: bool) -> None:
         """Le avisa al monitoreo si el bot esta escaneando la watchlist. Mientras lo

@@ -91,7 +91,13 @@ def main() -> None:
             t0 = time.time()
             q = real.get_quote(sym)
             print(f"  {sym}: {time.time()-t0:.2f}s -> bid {q.bid} x ask {q.ask}")
+    return ok
 
 
 if __name__ == "__main__":
-    main()
+    # os._exit evita un choque de Qt al desarmar la aplicacion, que hacia que el
+    # script terminara con codigo de error (127) aunque la prueba pasara. Sin esto,
+    # un fallo REAL queda tapado por ese ruido.
+    _ok = main()
+    sys.stdout.flush()
+    os._exit(0 if _ok else 1)

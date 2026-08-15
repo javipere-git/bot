@@ -362,6 +362,19 @@ class BotEngine:
         - Si saltan los strikes / se pierde la conexion, se DETIENE (ABORTED).
         """
         self._iniciar_reporte()
+        # Excluidas: se sacan UNA vez, al arrancar. No cuesta ninguna llamada (sale
+        # de un archivo) y evita gastar una vuelta entera por un simbolo que igual
+        # no se iba a operar.
+        excluidas = self._cfg.excluidas or set()
+        if excluidas:
+            fuera = [s for s in symbols if s.upper() in excluidas]
+            if fuera:
+                symbols = [s for s in symbols if s.upper() not in excluidas]
+                self._log(f"Excluidas: salteo {len(fuera)} simbolo(s) de la lista "
+                          f"({', '.join(fuera[:8])}{'...' if len(fuera) > 8 else ''})")
+            if not symbols:
+                self._log("*** Todos los simbolos de la watchlist estan excluidos. ***")
+                return Outcome.STOPPED
         while not self._stopped and not self._abort:
             for sym in symbols:
                 self._wait_if_paused()

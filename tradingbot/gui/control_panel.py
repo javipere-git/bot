@@ -41,6 +41,7 @@ from ..core.config import (
     OffsetUnit,
     OrderConfig,
 )
+from ..core import excluidas
 from ..core.models import Side
 from ..core.watchlist import parse_watchlist
 from .estado_ui import guardar_tilde, leer_tilde, poner_titulo
@@ -62,6 +63,9 @@ class ControlPanel(QWidget):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.exit_rows: list[dict] = []
+        # lo completa la ventana principal (es la unica que tiene el broker):
+        # recibe el dialogo de excluidas y le carga las bloqueadas cuando lleguen
+        self.traer_bloqueadas = None
 
         root = QVBoxLayout(self)
         root.setContentsMargins(6, 6, 6, 6)
@@ -148,7 +152,9 @@ class ControlPanel(QWidget):
         fila_botones.addWidget(self.btn_pegar, 1)
         lay.addLayout(fila_botones)
 
-        # Easy To Borrow: las acciones que el broker DONDE OPERAS deja vender en corto
+        # Easy To Borrow: las acciones que el broker DONDE OPERAS deja vender en corto.
+        # Los cuatro botones van en UNA linea: medidos con la letra de Windows piden
+        # 394 pixeles y el panel ya reserva 419, asi que entran enteros.
         etb = QHBoxLayout()
         self.btn_etb_cargar = QPushButton("Cargar lista ETB")
         self.btn_etb_bajar = QPushButton("Descargar lista ETB")
@@ -163,8 +169,45 @@ class ControlPanel(QWidget):
         for b in (self.btn_etb_cargar, self.btn_etb_bajar):
             b.setToolTip(AYUDA_ETB)
             etb.addWidget(b)
+
+        self.btn_excluidas = QPushButton("Excluidas")
+        self.btn_excluidas.setToolTip(
+            "Simbolos que el bot NO va a operar, aunque esten en la watchlist.\n\n"
+            "Son dos listas separadas: las TUYAS (por el motivo que sea) y las que\n"
+            "el BROKER tiene bloqueadas. Asi podes renovar la del broker sin volver\n"
+            "a cargar las tuyas.\n\n"
+            "Se guardan en config/excluidas.txt, que viaja con el repositorio: la\n"
+            "misma lista te sigue a las otras PCs."
+        )
+        self.btn_excluidas.clicked.connect(self._editar_excluidas)
+        self.btn_catalogo = QPushButton("Bajar catalogo")
+        self.btn_catalogo.setToolTip(
+            "Baja a un archivo (se abre con Excel) TODO lo que el broker donde operas\n"
+            "sabe de cada simbolo: si esta bloqueado para abrir, si es prestable, su\n"
+            "costo de prestamo, si lo marca iliquido...\n\n"
+            "Sirve para mirarlo con calma y decidir que poner en las excluidas."
+        )
+        etb.addWidget(self.btn_excluidas)
+        etb.addWidget(self.btn_catalogo)
         lay.addLayout(etb)
         return g
+
+    def _editar_excluidas(self) -> None:
+        from .excluidas_dialog import DialogoExcluidas
+        dlg = DialogoExcluidas(self)
+        if self.traer_bloqueadas is None:
+            # sin ventana principal (o sin broker) el boton no tiene a quien preguntarle
+            dlg.btn_traer.setEnabled(False)
+            dlg.btn_traer.setToolTip("Sin conexion con el broker.")
+        else:
+            dlg.btn_traer.clicked.connect(lambda: self.traer_bloqueadas(dlg))
+        if dlg.exec():
+            mias, broker = dlg.listas()
+            ruta = excluidas.guardar(mias, broker)
+            self.append_log(
+                f"Excluidas: {len(mias)} tuya(s) + {len(broker)} del broker "
+                f"= {len(set(mias) | set(broker))} simbolo(s). Guardado en {ruta}"
+            )
 
     def _grupo_entrada(self) -> QGroupBox:
         g = QGroupBox("Entrada")
@@ -616,6 +659,9 @@ class ControlPanel(QWidget):
             guard=guard,
             pause_on_fill=self.chk_pause.isChecked(),
             loop_watchlist=self.chk_loop.isChecked(),
+            # se lee del archivo en el momento de arrancar: si las editas con el bot
+            # detenido y volves a arrancar, ya rigen las nuevas
+            excluidas=excluidas.todas(),
         )
 
     @staticmethod

@@ -53,6 +53,15 @@ class BrokerHibrido(Broker):
         ejecuta."""
         return self._op.lista_etb()
 
+    def catalogo(self) -> list[dict]:
+        """Idem: las bloqueadas son las del broker que EJECUTA, no las del que da
+        los precios."""
+        return self._op.catalogo()
+
+    def orden_de_aviso(self, evento):
+        """El aviso de cuenta viene del broker donde se opera, asi que lo traduce el."""
+        return self._op.orden_de_aviso(evento)
+
     def distingue_venta_en_corto(self) -> bool:
         return self._op.distingue_venta_en_corto()
 

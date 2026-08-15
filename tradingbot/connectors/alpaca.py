@@ -305,6 +305,33 @@ class AlpacaBroker(Broker):
         except (TypeError, ValueError):
             return None
 
+    def catalogo(self) -> list[dict]:
+        """Todo lo que Alpaca sabe de cada activo, en UNA llamada (~14.000 en 1,8 s).
+
+        'bloqueada' sale de tradable=false: son las que directamente no se pueden
+        operar (medido el 15/08/2026: 863). El overnight va aparte: Alpaca marca
+        3.526 como suspendidas SOLO para la sesion nocturna, y esas si se pueden
+        operar en la rueda normal."""
+        data = self._get("/v2/assets",
+                         params={"status": "active", "asset_class": "us_equity"})
+        if not isinstance(data, list):
+            return []
+        filas = []
+        for a in data:
+            attrs = set(a.get("attributes") or [])
+            filas.append({
+                "symbol": str(a.get("symbol", "")).upper(),
+                "bloqueada": not a.get("tradable"),
+                "operable": bool(a.get("tradable")),
+                "prestable": bool(a.get("easy_to_borrow")),
+                "costo_prestamo": None,          # Alpaca no lo informa
+                "iliquida": None,                # tampoco
+                "marca_fraude": None,
+                "overnight_bloqueada": "overnight_halted" in attrs,
+                "mercado": str(a.get("exchange") or ""),
+            })
+        return filas
+
     def lista_etb(self) -> list[str]:
         """Easy To Borrow de Alpaca: sale del campo easy_to_borrow de cada activo.
         Una sola llamada trae los ~14.000 activos; se filtran los que ademas son

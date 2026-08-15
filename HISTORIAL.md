@@ -184,6 +184,21 @@ Consecuencia real, acotada: **solo los filtros que CUENTAN eventos en una ventan
 - **Tastytrade rechaza órdenes DAY entre las 16:00 y las 16:15 NY**, y desde las 16:15 las acepta pero quedan en cola para la rueda siguiente.
 - **Su sandbox usa precios reales** (la regla vieja de "límite bajo $3 se llena" ya no aplica) y **se reinicia cada 24 h**.
 - **Su token de acceso dura 15 minutos**: el canal de avisos pide uno nuevo en cada latido.
+- **El catálogo de instrumentos del sandbox de Tasty es de mentira** (15/08/2026): lista **24.802** símbolos en 15,9 s y no marca **ninguno** — `is-closing-only` y `is-fraud-risk` vienen en `false` para los 24.802. Producción lista **13.194** en 7,5 s, con **394 bloqueadas**, 6.004 ilíquidas y 3.539 con marca de fraude. Por eso el botón de excluidas, estando en sandbox, pide el catálogo de **producción** (lectura del listado de instrumentos: no toca la cuenta ni manda órdenes) y lo avisa en el registro.
+
+### Qué símbolos bloquea cada broker (medido el 15/08/2026)
+
+| | Alpaca paper | Tastytrade producción | Tradier |
+|---|---|---|---|
+| Símbolos listados | 14.234 en **1,8 s** (una llamada) | 13.194 en **7,5 s** (14 páginas) | no lo ofrece |
+| Bloqueadas para abrir | **863** (`tradable=false`) | **394** (`is-closing-only`: solo dejan cerrar) | — |
+| Prestables (ETB) | 5.276 | 1.589 | — |
+| Marcadas ilíquidas | no lo informa | 6.004 (45%) | — |
+| Marca de fraude | no lo informa | 3.539 (27%) | — |
+| Bloqueadas solo de noche | 3.526 (`overnight_halted`) | 12.638 | — |
+
+- **`overnight_halted` (Alpaca) no bloquea la rueda normal**: es la sesión nocturna (Blue Ocean) y es **excluyente** con `overnight_tradable`.
+- **Ilíquida y marca de fraude NO se usan para filtrar**: son el 45% y el 27% del mercado. Filtrar por ahí vaciaría cualquier watchlist. Se informan en el catálogo y nada más.
 
 ---
 
@@ -231,6 +246,7 @@ Están acá porque las lecciones son de método, no de código:
 6. **Arreglar la mitad visible.** En el ladder con odd lots arreglé los carteles pero no los botones: **el botón decía 108.20 y mandaba a 108.18**, peor que antes. Lo encontró el demo porque **mira a qué precio sale la orden, no solo lo que se muestra**.
 7. **Aplicar una regla de más.** Le dije que no podía tocar `trading_app.py` ni siquiera localmente. La regla de Mariano es sobre lo que va en el PR, no sobre diagnosticar.
 8. **Sacar algo sin preguntar.** Saqué el número de versión de la ventana de inicio porque el usuario no sabía qué era, cuando correspondía explicárselo.
+9. **Medir la pantalla con la letra equivocada (15/08).** Al agregar dos botones más a la línea de las ETB, medí los anchos con la pantalla de prueba (`offscreen`), cuya letra de repuesto es **2,3 veces más ancha** que la Segoe UI de Windows. Con esa medida "los cuatro botones no entraban" y llegué a partir la línea en dos. Con la letra real piden **394 px** y el panel ya reserva **419**: entran de sobra. **Cualquier medida de tamaño de pantalla hay que tomarla en la plataforma real** (no hace falta mostrar la ventana: alcanza con no forzar `offscreen` y nunca llamar a `show()`).
 
 **El patrón**: casi todos son *verificar lo que no es*. La contramedida que funcionó siempre fue **medir la propiedad que de verdad importa** — el píxel, no la paleta; el precio de la orden, no la etiqueta; el solapamiento de hilos, no el nombre del hilo; el lote deducido de los datos, no del precio.
 
