@@ -173,23 +173,41 @@ class ControlPanel(QWidget):
         self.spin_cant = QSpinBox()
         self.spin_cant.setRange(1, 1_000_000)
         self.spin_cant.setValue(50)
-        form.addRow("Cantidad:", self.spin_cant)
+        self.spin_cant.setMaximumWidth(90)
+        form.addRow("Cantidad:", self._wrap_izq(self.spin_cant))
 
-        self.spin_timeout = _spin(0.1, 600, 1.0, decimals=1, step=0.5, suffix=" s")
-        form.addRow("Timeout:", self.spin_timeout)
+        # Pausa antes de entrar a un simbolo nuevo. 0 = apagada (como siempre).
+        self.spin_pausa = _spin(0.0, 60, 0.0, decimals=1, step=0.5, suffix=" s")
+        self.spin_pausa.setMaximumWidth(90)
+        self.spin_pausa.setToolTip(
+            "Espera despues de que el simbolo pasa los filtros y ANTES de mandar la\n"
+            "orden (con cotizacion fresca). Sirve para brokers que tardan en liberar\n"
+            "el poder de compra de la orden anterior, como Tastytrade.\n"
+            "0 = sin pausa, el bot va de un simbolo al otro como siempre."
+        )
+        form.addRow("Pausa nuevo simbolo:", self._wrap_izq(self.spin_pausa))
 
         self.combo_lado = QComboBox()
         self.combo_lado.addItems(["Compra (bid +)", "Venta (ask -)"])
-        form.addRow("Lado:", self.combo_lado)
+        self.combo_lado.setMaximumWidth(130)
+        form.addRow("Lado:", self._wrap_izq(self.combo_lado))
 
+        # Cada orden con su propio timeout: cuanto se la deja viva antes de pasar a
+        # la siguiente. El motor ya lo soportaba (OrderConfig.timeout_s); antes la
+        # pantalla le mandaba el mismo valor a las dos.
         o1 = QHBoxLayout()
         self.spin_o1 = _spin(-100, 100, 0.00)
         self.combo_o1 = QComboBox()
         self.combo_o1.addItems(["%", "$"])
         self.combo_o1.setToolTip("% del spread, o $ fijo")
         self.combo_o1.setMaximumWidth(60)
+        self.spin_to1 = _spin(0.1, 600, 1.5, decimals=1, step=0.5, suffix=" s")
+        self.spin_to1.setMaximumWidth(80)
+        self.spin_to1.setToolTip("Cuanto espera el llenado de la Orden 1 antes de\n"
+                                 "pasar a la Orden 2 (o de cancelar, si no hay 2)")
         o1.addWidget(self.spin_o1)
         o1.addWidget(self.combo_o1)
+        o1.addWidget(self.spin_to1)
         form.addRow("Orden 1:", self._wrap(o1))
 
         self.chk_o2 = QCheckBox("Usar Orden 2")
@@ -202,9 +220,19 @@ class ControlPanel(QWidget):
         self.combo_o2.addItems(["%", "$"])
         self.combo_o2.setToolTip("% del spread, o $ fijo")
         self.combo_o2.setMaximumWidth(60)
+        self.spin_to2 = _spin(0.1, 600, 1.5, decimals=1, step=0.5, suffix=" s")
+        self.spin_to2.setMaximumWidth(80)
+        self.spin_to2.setToolTip("Cuanto espera el llenado de la Orden 2 antes de\n"
+                                 "cancelar y pasar al simbolo siguiente")
         o2.addWidget(self.spin_o2)
         o2.addWidget(self.combo_o2)
-        form.addRow("Orden 2:", self._wrap(o2))
+        o2.addWidget(self.spin_to2)
+        self._fila_o2 = self._wrap(o2)
+        form.addRow("Orden 2:", self._fila_o2)
+        # si la Orden 2 no se usa, su fila queda apagada (se ve que no aplica)
+        self._lbl_o2 = form.labelForField(self._fila_o2)
+        self.chk_o2.toggled.connect(self._habilitar_orden2)
+        self._habilitar_orden2(self.chk_o2.isChecked())
 
         sp = QHBoxLayout()
         self.ed_spread_min = QLineEdit()
@@ -530,11 +558,13 @@ class ControlPanel(QWidget):
     def build_config(self) -> EngineConfig:
         """Arma la configuracion del motor leyendo todos los campos del panel."""
         side = Side.BUY if self.combo_lado.currentIndex() == 0 else Side.SELL_SHORT
-        timeout = self.spin_timeout.value()
-        order1 = OrderConfig(self.spin_o1.value(), self._unit(self.combo_o1), timeout)
+        # cada orden con SU timeout (antes las dos compartian uno solo)
+        order1 = OrderConfig(self.spin_o1.value(), self._unit(self.combo_o1),
+                             self.spin_to1.value())
         order2 = None
         if self.chk_o2.isChecked():
-            order2 = OrderConfig(self.spin_o2.value(), self._unit(self.combo_o2), timeout)
+            order2 = OrderConfig(self.spin_o2.value(), self._unit(self.combo_o2),
+                                 self.spin_to2.value())
 
         exit_levels: list[ExitLevel] = []
         if self.grp_cierre.isChecked():
@@ -565,6 +595,7 @@ class ControlPanel(QWidget):
             quantity=self.spin_cant.value(),
             order1=order1,
             order2=order2,
+            pausa_simbolo_s=self.spin_pausa.value(),
             spread_min=self._parse_float(self.ed_spread_min.text()),
             spread_max=self._parse_float(self.ed_spread_max.text()),
             extended_hours=self.chk_ext.isChecked(),
@@ -619,6 +650,24 @@ class ControlPanel(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         w.setLayout(layout)
         return w
+
+    @staticmethod
+    def _wrap_izq(widget) -> QWidget:
+        """Deja el campo con su ancho y el resto vacio, en vez de estirarlo a lo
+        ancho de la columna (cantidad, pausa y lado no necesitan tanto lugar)."""
+        w = QWidget()
+        lay = QHBoxLayout(w)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.addWidget(widget)
+        lay.addStretch(1)
+        return w
+
+    def _habilitar_orden2(self, activo: bool) -> None:
+        """Apaga la fila de la Orden 2 cuando no se usa, para que se vea que no
+        aplica (antes quedaba editable aunque el bot la ignorara)."""
+        self._fila_o2.setEnabled(activo)
+        if self._lbl_o2 is not None:
+            self._lbl_o2.setEnabled(activo)
 
     def append_log(self, msg: str) -> None:
         self.log.appendPlainText(msg)

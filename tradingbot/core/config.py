@@ -106,6 +106,19 @@ class EngineConfig:
     extended_hours: bool = False        # operar tambien fuera de la rueda regular
     reprice_mode: str = "modify"        # "modify" (recomendado) o "cancel_new"
     poll_interval_s: float = 0.5        # cada cuanto consulta estado / cotizacion
+    # PAUSA ANTES DE ENTRAR A UN SIMBOLO NUEVO (0 = apagada, se comporta como siempre).
+    #
+    # Para que existe: hay brokers que NO liberan al instante el poder de compra de
+    # una orden que se acaba de cancelar. Medido en Tastytrade el 14/08/2026: tres
+    # segundos despues de cancelar una orden de $4.541, rechazaron una de $670
+    # teniendo $7.334 disponibles. Con una pausa, el broker alcanza a devolver la
+    # plata antes de que salga la orden siguiente.
+    #
+    # DONDE cae la pausa, y por que ahi: DESPUES de que el simbolo paso todos los
+    # filtros y ANTES de leer el bid/ask con el que se calcula la orden. Asi no se
+    # pierde tiempo en simbolos que igual iban a saltearse, y el precio con el que
+    # se entra es fresco (se relee la cotizacion despues de esperar).
+    pausa_simbolo_s: float = 0.0
 
     # ----- salida (Tanda 2) -----
     exit_levels: list[ExitLevel] = field(default_factory=list)  # hasta 4

@@ -481,6 +481,24 @@ class BotEngine:
         if not self._movimiento_ok(sym, spread):
             return None
 
+        # PAUSA antes de entrar (si esta configurada). Va JUSTO ACA: el simbolo ya
+        # paso todos los filtros, asi que no se espera al pedo por uno que iba a
+        # saltearse igual. Ver EngineConfig.pausa_simbolo_s.
+        if self._cfg.pausa_simbolo_s > 0:
+            self._log(f"{sym}: paso los filtros; espero "
+                      f"{self._cfg.pausa_simbolo_s:.1f}s antes de entrar")
+            if not self._dormir(self._cfg.pausa_simbolo_s):
+                return None                 # frenaron el bot durante la espera
+            # Cotizacion FRESCA: despues de esperar, el precio de hace un momento ya
+            # no sirve para calcular la orden. Y con ella se actualiza la referencia
+            # del guardia: si midiera desde el precio viejo, nace ciega -exactamente
+            # el punto ciego que costo plata el 20/07/2026-.
+            quote, ok = self._get_quote(sym)
+            if not ok:
+                return None
+            self._entry_ref = quote.bid if self._cfg.side == Side.BUY else quote.ask
+            spread = round(quote.ask - quote.bid, 4)
+
         price1 = self._entry_price(quote, self._cfg.order1)
         self._log(
             f"{sym}: Orden 1  {self._cfg.side.value} {self._cfg.quantity} @ {price1:.2f}"
@@ -956,6 +974,20 @@ class BotEngine:
                 return False
             self._clock.sleep(max(0.0, min(self._cfg.poll_interval_s,
                                            deadline - self._clock.now())))
+
+    def _dormir(self, segundos: float) -> bool:
+        """Espera, pero SIN quedarse sorda: revisa seguido si frenaron el bot.
+
+        Devuelve False si hay que abandonar (Detener o freno por errores). Dormir de
+        un saque dejaria al boton Detener sin efecto hasta que terminara la espera."""
+        fin = self._clock.now() + segundos
+        while True:
+            if self._stopped or self._abort:
+                return False
+            falta = fin - self._clock.now()
+            if falta <= 0:
+                return True
+            self._clock.sleep(max(0.0, min(self._cfg.poll_interval_s, falta)))
 
     def _entered_after_wait(self, order_id: str, timeout_s: float) -> bool:
         if self._wait_fill(order_id, timeout_s):
