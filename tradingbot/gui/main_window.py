@@ -770,7 +770,8 @@ class MainWindow(QMainWindow):
         el monitoreo y el ladder EN EL MOMENTO (medido: ~200 ms) en vez de esperar
         el sondeo de cada 4 segundos."""
         try:
-            self._avisos = self._perfil.crear_avisos()
+            # el broker va como TRADUCTOR del aviso (no se le pide nada)
+            self._avisos = self._perfil.crear_avisos(self._manual_broker)
         except Exception as e:  # noqa: BLE001
             self._avisos = None
             self.control.append_log(f"Sin avisos instantaneos del broker: {e}")
@@ -782,12 +783,21 @@ class MainWindow(QMainWindow):
             )
             return
         self._avisos.cambio.connect(self._refrescar_ordenes_ya)
+        # camino rapido: el aviso ya trae la orden (o su estado), asi que la pantalla
+        # se actualiza con ESO, sin esperar la lectura ni gastar una llamada
+        self._avisos.orden.connect(self._aviso_de_orden)
         self._avisos.start()
         self.control.append_log("Avisos de cuenta activos: las ordenes aparecen al instante.")
 
     def _refrescar_ordenes_ya(self) -> None:
         if getattr(self, "_market_worker", None) is not None:
             self._market_worker.refrescar_ya()
+
+    def _aviso_de_orden(self, oid, estado, orden) -> None:
+        """Llega con lo que el broker mando en el aviso. La lectura de respaldo se
+        dispara igual (por 'cambio'): esto solo adelanta lo que ya sabemos."""
+        if getattr(self, "_market_worker", None) is not None:
+            self._market_worker.aplicar_aviso(oid, estado, orden)
 
     def _on_positions(self, positions) -> None:
         """Al abrir la app, avisa UNA vez si ya habia una posicion abierta de antes

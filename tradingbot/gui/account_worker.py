@@ -19,12 +19,29 @@ from PySide6.QtCore import QObject, Signal
 
 class AccountWorker(QObject):
     cambio = Signal()          # "algo cambio en las ordenes: refresca ya"
+    # CAMINO RAPIDO: (id, estado, orden_completa_o_None) sacados del propio aviso.
+    # Antes se tiraba lo que el aviso traia y se le volvia a preguntar al broker;
+    # con esto la pantalla se actualiza al instante y sin gastar una llamada.
+    orden = Signal(object, object, object)
 
-    def __init__(self, stream, tipo: str) -> None:
+    def __init__(self, stream, tipo: str, broker=None) -> None:
         super().__init__()
         self._stream = stream
-        self._tipo = tipo      # "tradier" | "alpaca"
+        self._tipo = tipo      # "tradier" | "alpaca" | "tastytrade"
+        self._broker = broker  # el que sabe traducir SU formato de aviso
         self._started = False
+
+    def _avisar(self, evento) -> None:
+        """Un aviso del broker: se emite el dato rapido (si el conector lo entiende)
+        y SIEMPRE el 'cambio', que dispara la lectura de respaldo."""
+        if self._broker is not None:
+            try:
+                oid, estado, orden = self._broker.orden_de_aviso(evento)
+                if oid is not None:
+                    self.orden.emit(oid, estado, orden)
+            except Exception:  # noqa: BLE001
+                pass           # un aviso raro nunca corta el camino normal
+        self.cambio.emit()
 
     def start(self) -> None:
         if self._started:
@@ -32,9 +49,9 @@ class AccountWorker(QObject):
         self._started = True
         if self._tipo == "alpaca":
             # el aviso de Alpaca trae (orden, evento, cantidad_de_posicion)
-            self._stream.start(on_update=lambda o, ev, pq: self.cambio.emit())
+            self._stream.start(on_update=lambda o, ev, pq: self._avisar(o))
         else:
-            self._stream.start(lambda data: self.cambio.emit())
+            self._stream.start(self._avisar)
 
     def esta_conectado(self) -> bool:
         try:

@@ -8,6 +8,7 @@ monitoreo se ve siempre, no solo cuando el bot opera.
 from __future__ import annotations
 
 import time
+from dataclasses import replace
 
 from PySide6.QtCore import QObject, Signal, Slot
 
@@ -105,6 +106,36 @@ class MarketWorker(QObject):
             self._ultimo_refresco = time.monotonic()
         except Exception as e:  # noqa: BLE001
             self.error.emit(f"Monitoreo (ordenes): {e}")
+
+    def aplicar_aviso(self, oid, estado, orden) -> None:
+        """CAMINO RAPIDO: actualiza una orden con lo que vino en el propio aviso del
+        broker, sin pedirle nada.
+
+        Antes, cuando el broker avisaba, tirabamos el contenido del aviso y le
+        volviamos a preguntar "¿como quedo esa orden?". O sea, le preguntabamos algo
+        que acababa de decirnos: ~1 segundo y dos llamadas, cuando el dato ya estaba.
+
+        Alpaca y Tastytrade mandan la orden entera. Tradier manda solo el id y el
+        estado, que alcanza para actualizar una que ya conocemos (la que acabas de
+        mandar desde el ladder); si es una que no conocemos, no se inventa nada y la
+        lectura de respaldo la trae.
+        """
+        if not oid:
+            return
+        oid = str(oid)
+        if orden is not None:
+            self._cache_ordenes[oid] = orden          # la orden entera
+        else:
+            vieja = self._cache_ordenes.get(oid)      # solo el estado
+            if vieja is None or estado is None or getattr(vieja, "status", None) == estado:
+                return
+            try:
+                self._cache_ordenes[oid] = replace(vieja, status=estado)
+            except Exception:  # noqa: BLE001
+                return
+        todas = list(self._cache_ordenes.values())
+        self.orders.emit([o for o in todas if o.is_active])
+        self.closed_orders.emit([o for o in todas if not o.is_active])
 
     def refrescar_ya(self) -> None:
         """Lo llama la ventana cuando el broker avisa que una orden cambio."""

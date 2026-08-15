@@ -49,10 +49,14 @@ class Perfil:
     def crear_broker(self):
         return self._crear_broker()
 
-    def crear_avisos(self):
+    def crear_avisos(self, broker=None):
         """Canal de AVISOS DE CUENTA (orden puesta/ejecutada/cancelada) para que la
-        pantalla se refresque al instante. None si el broker no lo ofrece."""
-        return self._crear_avisos() if self._crear_avisos else None
+        pantalla se refresque al instante. None si el broker no lo ofrece.
+
+        `broker` es quien sabe traducir el aviso de ESE broker a una orden nuestra
+        (cada uno manda un formato distinto). Sin el, el aviso sigue sirviendo como
+        disparador de la lectura, como antes."""
+        return self._crear_avisos(broker) if self._crear_avisos else None
 
     def crear_stream(self):
         """Devuelve el StreamWorker de precios en vivo, o None si este broker
@@ -114,21 +118,23 @@ def perfiles_disponibles() -> list[Perfil]:
     from .stream_worker import StreamWorker  # import tardio (evita ciclo)
     from .account_worker import AccountWorker
 
-    def avisos_tradier():
+    def avisos_tradier(broker=None):
         return AccountWorker(
-            TradierAccountStream.from_credentials(environment="production"), "tradier")
+            TradierAccountStream.from_credentials(environment="production"),
+            "tradier", broker)
 
     def avisos_tasty(entorno):
-        def crear():
+        def crear(broker=None):
             return AccountWorker(
                 TastytradeAccountStream.from_credentials(environment=entorno),
-                "tastytrade")
+                "tastytrade", broker)
         return crear
 
     def avisos_alpaca(entorno):
-        def crear():
+        def crear(broker=None):
             return AccountWorker(
-                AlpacaTradeStream.from_credentials(environment=entorno), "alpaca")
+                AlpacaTradeStream.from_credentials(environment=entorno),
+                "alpaca", broker)
         return crear
 
     cfg = _leer_cfg()

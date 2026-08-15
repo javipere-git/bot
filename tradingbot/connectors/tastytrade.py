@@ -299,6 +299,17 @@ class TastytradeBroker(Broker):
             ))
         return out
 
+    def orden_de_aviso(self, evento):
+        """El aviso de Tasty viene como {'type': 'Order', 'data': {...la orden...}}.
+        Trae la orden entera, asi que se aprovecha completa."""
+        if not isinstance(evento, dict) or evento.get("type") != "Order":
+            return (None, None, None)     # AccountBalance / CurrentPosition: no es orden
+        try:
+            orden = self._parse_order(evento.get("data") or {})
+        except Exception:  # noqa: BLE001
+            return (None, None, None)
+        return (str(orden.id), orden.status, orden)
+
     def _parse_order(self, o: dict) -> Order:
         legs = o.get("legs") or [{}]
         leg = legs[0]

@@ -268,6 +268,19 @@ class TradierBroker(Broker):
             volume=int(float(q.get("volume") or 0)),  # volumen operado en el dia
         )
 
+    def orden_de_aviso(self, evento):
+        """El aviso de Tradier trae el id y el estado, pero NO el simbolo ni el lado.
+
+        Alcanza para confirmar una orden que la pantalla ya conoce (que es el caso
+        del ladder: la acabas de mandar), no para armar una de cero. Por eso se
+        devuelve la orden completa en None y el respaldo por lectura se encarga de
+        las que aparezcan de otro lado."""
+        if not isinstance(evento, dict) or evento.get("event") != "order":
+            return (None, None, None)
+        oid = evento.get("id")
+        estado = _STATUS_MAP.get(str(evento.get("status") or "").lower())
+        return (str(oid) if oid is not None else None, estado, None)
+
     def _parse_order(self, o: dict) -> Order:
         try:
             side = Side(o["side"])

@@ -116,10 +116,17 @@ else:
     ordenes = b.get_orders()
     dias = sorted({str(o.create_date or "")[:10] for o in ordenes} - {""})
     print(f"  la pasada completa trajo {len(ordenes)} ordenes")
-    check(bool(dias), "las ordenes traen su fecha (si no, esto no probaria nada)")
-    check(len(dias) == 1, "la pasada completa trae UN solo dia", str(dias))
-    if t is not None:
-        check(dias == [hoy], "y ese dia es HOY", f"{dias} vs {hoy}")
+    if not ordenes:
+        # dia sin operar (fin de semana o feriado): que no traiga nada ES lo correcto,
+        # y no hay fechas que revisar. Sin esto la prueba falla los sabados.
+        print("  (hoy no hay ordenes: se saltean los chequeos de fecha)")
+        check(con_filtro == 0, "y el broker coincide en que no hay ninguna de hoy",
+              str(con_filtro))
+    else:
+        check(bool(dias), "las ordenes traen su fecha (si no, esto no probaria nada)")
+        check(len(dias) == 1, "la pasada completa trae UN solo dia", str(dias))
+        if t is not None:
+            check(dias == [hoy], "y ese dia es HOY", f"{dias} vs {hoy}")
     check(con_filtro is not None and len(ordenes) <= con_filtro + 5,
           "trae las del dia, no el historico entero",
           f"{len(ordenes)} vs {sin_filtro} sin filtrar")

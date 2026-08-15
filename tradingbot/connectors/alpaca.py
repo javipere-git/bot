@@ -498,6 +498,17 @@ class AlpacaBroker(Broker):
     def _parse_order(self, o: dict) -> Order:
         return _parse_order_dict(o)
 
+    def orden_de_aviso(self, evento):
+        """El aviso de Alpaca trae la orden ENTERA, asi que se aprovecha completa
+        y no hace falta volver a preguntarle nada."""
+        if not isinstance(evento, dict):
+            return (None, None, None)
+        try:
+            orden = _parse_order_dict(evento)
+        except Exception:  # noqa: BLE001
+            return (None, None, None)
+        return (str(orden.id), orden.status, orden)
+
     # ---------- Ordenes ----------
     def place_order(self, request: OrderRequest) -> Order:
         body = {

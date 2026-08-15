@@ -12,7 +12,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Callable
 
-from .models import DayPnL, Fill, Order, OrderRequest, Position, Quote
+from .models import DayPnL, Fill, Order, OrderRequest, OrderStatus, Position, Quote
 
 
 class Broker(ABC):
@@ -47,6 +47,24 @@ class Broker(ABC):
     @abstractmethod
     def get_order(self, order_id: str) -> Order:
         """Devuelve una orden por su id, con su estado actual (open/filled/...)."""
+
+    def orden_de_aviso(self, evento) -> tuple[str | None, "OrderStatus | None", Order | None]:
+        """Traduce un aviso del canal de cuenta a datos de una orden.
+
+        Cuando el broker avisa que una orden cambio, ese aviso YA trae informacion
+        que hasta ahora tirabamos para despues volver a preguntarsela. Esto la
+        aprovecha: la pantalla puede confirmar la orden al instante y sin gastar
+        una sola llamada.
+
+        Devuelve (id, estado, orden_completa). Cada broker manda distinto:
+          - Alpaca y Tastytrade -> la orden ENTERA (los tres datos)
+          - Tradier             -> solo id y estado (no manda ni el simbolo ni el
+                                   lado), asi que sirve para actualizar una orden
+                                   que ya conocemos, no para armar una de cero.
+
+        Por defecto no entiende ningun aviso: el que no lo implemente sigue
+        funcionando como siempre, con la lectura de respaldo."""
+        return (None, None, None)
 
     @abstractmethod
     def get_quote(self, symbol: str) -> Quote:
