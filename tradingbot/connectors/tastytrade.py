@@ -68,6 +68,15 @@ _ACCION = {
 }
 _LADO = {v: k for k, v in _ACCION.items()}
 
+# Para el historial: como se lee cada accion en castellano. Tasty es el unico de
+# los tres que dice si la operacion ABRIO o CERRO la posicion.
+_LADO_TASTY = {
+    "Buy to Open": "Compra (abre)",
+    "Sell to Close": "Venta (cierra)",
+    "Sell to Open": "Venta en corto (abre)",
+    "Buy to Close": "Compra (cierra el corto)",
+}
+
 # En una compra sale plata (Debit); en una venta entra (Credit).
 _EFECTO = {
     Side.BUY: "Debit",
@@ -112,6 +121,18 @@ def _fecha(valor) -> str:
         except (ValueError, OSError, OverflowError):
             return ""
     return texto
+
+
+def _con_signo(item: dict, campo: str) -> float | None:
+    """Tasty manda la plata SIN signo y aparte un 'efecto' que dice si entro o salio.
+
+    Ejemplo: commission '1.0' + commission-effect 'Debit' = te cobraron un dolar,
+    o sea -1. Sin esto, una comision y un reintegro se veria igual."""
+    if campo not in item:
+        return None
+    monto = _f(item.get(campo), 0.0)
+    efecto = str(item.get(f"{campo}-effect") or "")
+    return round(-monto if efecto == "Debit" else monto, 4)
 
 
 def _f(valor, por_defecto: float = 0.0) -> float:
@@ -542,6 +563,52 @@ class TastytradeBroker(Broker):
         except Exception:  # noqa: BLE001
             return None
         return None
+
+    def operaciones(self, desde: str, hasta: str) -> list[dict]:
+        """Ejecuciones de la cuenta (endpoint transactions, filtrado a Trade).
+
+        Medido el 17/08/2026: 252 operaciones de 30 dias en 0,6 s (2 paginas de 250).
+        Es el mas completo de los tres: trae comision, tasas separadas, el neto ya
+        calculado, el mercado donde se ejecuto y si abrio o cerro la posicion.
+
+        El endpoint mezcla movimientos de plata (depositos, intereses) con las
+        operaciones; aca se devuelven SOLO las operaciones."""
+        from ..core.historial import a_hora_ny
+
+        filas = []
+        for pagina in range(0, 200):        # 200 x 250 = 50.000, tope de seguridad
+            js = self._pedir("GET", f"/accounts/{self._account}/transactions",
+                             params={"start-date": desde, "end-date": hasta,
+                                     "per-page": 250, "page-offset": pagina},
+                             timeout=60)
+            items = js.get("data", {}).get("items", [])
+            if not items:
+                break
+            for i in items:
+                if i.get("transaction-type") != "Trade":
+                    continue            # depositos, intereses, ajustes: no son trades
+                cant = _f(i.get("quantity"))
+                precio = _f(i.get("price"))
+                filas.append({
+                    "fecha_hora": a_hora_ny(i.get("executed-at")),
+                    "symbol": str(i.get("symbol", "")).upper(),
+                    "lado": _LADO_TASTY.get(str(i.get("action") or ""), i.get("action")),
+                    "cantidad": cant,
+                    "precio": precio,
+                    "importe": round(cant * precio, 2),
+                    "comision": _con_signo(i, "commission"),
+                    "tasas": round(sum(
+                        abs(_con_signo(i, c) or 0.0)
+                        for c in ("clearing-fees", "regulatory-fees",
+                                  "proprietary-index-option-fees")), 4),
+                    "neto": _con_signo(i, "net-value"),
+                    "order_id": i.get("order-id"),
+                    "id_ejecucion": i.get("exec-id") or i.get("id"),
+                    "notas": i.get("destination-venue") or i.get("exchange"),
+                })
+            if pagina + 1 >= js.get("pagination", {}).get("total-pages", 1):
+                break
+        return filas
 
     def catalogo(self) -> list[dict]:
         """Todo lo que Tasty sabe de cada instrumento.

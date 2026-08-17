@@ -216,6 +216,27 @@ permite UNA sola conexion de streaming de datos a la vez (con Algo Trader Plus, 
   - **Iliquida (45%) y marca de fraude (27%) NO se usan para bloquear nada**: filtrar
     por ahi vaciaria cualquier watchlist. Son solo para mirar.
 
+### Historial de operaciones
+- **"Operaciones"** (17/08/2026), al lado del selector de reportes. Baja a un `.csv`
+  (se abre con Excel) **todas las ejecuciones de la cuenta** entre dos fechas.
+  - Son **EJECUCIONES, no ordenes**: lo que de verdad se opero. Una orden puede
+    llenarse en varios pedazos y a precios distintos; eso es lo que sirve para
+    revisar como te fue.
+  - Columnas: fecha y hora **de Nueva York**, simbolo, lado, cantidad, precio,
+    importe, comision, tasas, neto, ID de la orden, ID de la ejecucion y notas.
+    Lo que ese broker **no informa queda vacio**, no en cero.
+  - Sale del broker donde **OPERAS**, e incluye lo que hayas hecho a mano o desde
+    otra PC: es la cuenta entera, no solo lo que hizo el bot.
+  - El cuadro arranca con el **ultimo mes** y tiene atajos de 7 / 30 / 90 dias.
+  - Medido el 17/08/2026, 30 dias: **Alpaca 3.008** ejecuciones en 6,9 s (31 paginas
+    de 100), **Tradier 3.526** en 1,6 s (una sola llamada), **Tastytrade 252** en
+    0,6 s. Va en otro hilo: la app sigue andando.
+  - Que informa cada uno: Alpaca **no** manda comisiones ni tasas (su modelo es sin
+    comision). Tradier manda la comision y el importe con signo, pero **su historial
+    no trae la hora**, solo la fecha. Tastytrade es el mas completo: comision, tasas
+    separadas, neto, mercado donde se ejecuto, y **si la operacion abrio o cerro** la
+    posicion.
+
 ### Entrada
 - **Cantidad**: acciones por orden.
 - **Timeout**: segundos que espera cada orden (Orden 1 y Orden 2) antes de repreciar/pasar.

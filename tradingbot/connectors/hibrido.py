@@ -58,6 +58,10 @@ class BrokerHibrido(Broker):
         los precios."""
         return self._op.catalogo()
 
+    def operaciones(self, desde: str, hasta: str) -> list[dict]:
+        """El historial es de la CUENTA donde se opera."""
+        return self._op.operaciones(desde, hasta)
+
     def orden_de_aviso(self, evento):
         """El aviso de cuenta viene del broker donde se opera, asi que lo traduce el."""
         return self._op.orden_de_aviso(evento)

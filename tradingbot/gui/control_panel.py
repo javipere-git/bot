@@ -114,8 +114,19 @@ class ControlPanel(QWidget):
             "el resumen del dia se arma en el momento, se guarda y se abre."
         )
         self.btn_descargar_reporte.setEnabled(False)   # se habilita cuando hay pasadas
+        self.btn_operaciones = QPushButton("Operaciones")
+        self.btn_operaciones.setToolTip(
+            "Baja a un archivo (se abre con Excel) TODAS las operaciones de la cuenta\n"
+            "entre dos fechas: fecha y hora de NY, simbolo, lado, cantidad, precio,\n"
+            "importe, comision, tasas y neto.\n\n"
+            "Son EJECUCIONES, no ordenes: lo que de verdad se opero. Sale del broker\n"
+            "donde OPERAS, no del que da los precios, e incluye lo que hayas operado\n"
+            "a mano o desde otra PC.\n\n"
+            "Es lo que la pagina del broker no te deja descargar de una."
+        )
         fila_reg.addWidget(self.combo_reportes)
         fila_reg.addWidget(self.btn_descargar_reporte)
+        fila_reg.addWidget(self.btn_operaciones)
         root.addLayout(fila_reg)
 
         self.log = QPlainTextEdit()

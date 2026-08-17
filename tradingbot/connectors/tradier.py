@@ -208,6 +208,50 @@ class TradierBroker(Broker):
     def get_closed_orders(self) -> list[Order]:
         return [o for o in self.get_orders() if not o.is_active]
 
+    def operaciones(self, desde: str, hasta: str) -> list[dict]:
+        """Ejecuciones de la cuenta (endpoint history, filtrado a type=trade).
+
+        Medido el 17/08/2026: 3.526 operaciones de 30 dias en 1,6 s, en UNA sola
+        llamada (no pagina: se le pide un limite alto y las manda todas).
+
+        OJO: el historial de Tradier trae la FECHA pero no la hora. Por eso la
+        columna de hora sale con la fecha sola, en vez de inventar un horario.
+        Tradier SI informa la comision, y el importe con signo (negativo cuando
+        pagaste, positivo cuando cobraste)."""
+        from ..core.historial import a_hora_ny
+
+        data = self._get(f"/accounts/{self._account_id}/history",
+                         params={"start": desde, "end": hasta, "type": "trade",
+                                 "limit": 10000},
+                         timeout=60)
+        nodo = (data or {}).get("history")
+        if not nodo or nodo == "null":
+            return []
+        eventos = nodo.get("event") or []
+        if isinstance(eventos, dict):       # un solo evento viene sin lista
+            eventos = [eventos]
+        filas = []
+        for e in eventos:
+            t = e.get("trade") or {}
+            cant = float(t.get("quantity") or 0)
+            precio = float(t.get("price") or 0)
+            filas.append({
+                "fecha_hora": a_hora_ny(e.get("date")),
+                "symbol": str(t.get("symbol", "")).upper(),
+                # la cantidad viene NEGATIVA en las ventas: de ahi sale el lado
+                "lado": "Compra" if cant > 0 else "Venta",
+                "cantidad": abs(cant),
+                "precio": precio,
+                "importe": round(abs(cant) * precio, 2),
+                "comision": t.get("commission"),
+                "tasas": None,              # Tradier no las separa
+                "neto": e.get("amount"),
+                "order_id": None,           # el historial no lo trae
+                "id_ejecucion": None,
+                "notas": t.get("description"),
+            })
+        return filas
+
     def lista_etb(self) -> list[str]:
         """Easy To Borrow de Tradier: endpoint dedicado, una sola llamada."""
         data = self._get("/markets/etb")

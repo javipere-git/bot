@@ -76,6 +76,10 @@ _SIDE_A_ALPACA = {
     Side.SELL_SHORT: "sell",
 }
 
+# para el historial: Alpaca solo tiene buy/sell (no distingue el corto), asi que
+# no se puede saber por el dato si una venta abrio un corto o cerro un largo
+_LADO_ALPACA = {"buy": "Compra", "sell": "Venta"}
+
 
 # ---------------------------------------------------------------------------
 # Hub de AVISOS DE CUENTA compartido: un solo trade stream + cache por cuenta.
@@ -304,6 +308,49 @@ class AlpacaBroker(Broker):
             return float(acc.get("buying_power"))
         except (TypeError, ValueError):
             return None
+
+    def operaciones(self, desde: str, hasta: str) -> list[dict]:
+        """Ejecuciones de la cuenta (endpoint activities/FILL).
+
+        Medido el 17/08/2026: 3.008 ejecuciones de 30 dias en 6,9 s (31 paginas de
+        100). Se pagina con page_token, que es el id de la ultima fila traida.
+
+        Alpaca NO informa comisiones ni tasas en este endpoint (su modelo es sin
+        comision), asi que esas columnas quedan vacias."""
+        from ..core.historial import a_hora_ny
+
+        filas: list[dict] = []
+        token = None
+        for _ in range(500):            # 500 x 100 = 50.000, tope de seguridad
+            params = {"after": f"{desde}T00:00:00Z", "until": f"{hasta}T23:59:59Z",
+                      "page_size": 100}
+            if token:
+                params["page_token"] = token
+            lote = self._get("/v2/account/activities/FILL", params=params)
+            if not isinstance(lote, list) or not lote:
+                break
+            for a in lote:
+                cant = float(a.get("qty") or 0)
+                precio = float(a.get("price") or 0)
+                filas.append({
+                    "fecha_hora": a_hora_ny(a.get("transaction_time")),
+                    "symbol": str(a.get("symbol", "")).upper(),
+                    "lado": _LADO_ALPACA.get(str(a.get("side") or ""), a.get("side")),
+                    "cantidad": cant,
+                    "precio": precio,
+                    "importe": round(cant * precio, 2),
+                    "comision": None,           # Alpaca no las informa aca
+                    "tasas": None,
+                    "neto": None,
+                    "order_id": a.get("order_id"),
+                    "id_ejecucion": a.get("id"),
+                    "notas": ("ejecucion parcial"
+                              if a.get("type") == "partial_fill" else None),
+                })
+            token = lote[-1].get("id")
+            if len(lote) < 100:
+                break
+        return filas
 
     def catalogo(self) -> list[dict]:
         """Todo lo que Alpaca sabe de cada activo, en UNA llamada (~14.000 en 1,8 s).

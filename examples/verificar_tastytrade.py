@@ -100,10 +100,16 @@ def main() -> int:
     # ejecutable y se llena al instante (paso: una venta a 5.00 con AAPL en 307 dejo
     # un corto abierto). Para que la orden quede QUIETA y se pueda cancelar, la venta
     # tiene que ir MUY POR ENCIMA del mercado (y la compra, muy por debajo).
+    # El corto va en OTRO simbolo a proposito. Medido el 17/08/2026: el sandbox de
+    # Tasty ACEPTA el cancel de estos cortos (contesta "Cancel Requested") pero
+    # NUNCA lo completa: la orden vuelve a "Live" y queda viva hasta el cierre. Y
+    # como Tasty no admite una compra y una venta abiertas en el mismo simbolo, si
+    # el corto fuera de AAPL, el sobrante trababa el ciclo de ordenes de la corrida
+    # siguiente. Con simbolos separados, cada prueba se banca los restos de la otra.
     print("\n=== VENTA EN CORTO (Sell to Open, precio alto: no se ejecuta) ===")
-    s = chequear("place_order sell_short 5 AAPL @ 9999",
+    s = chequear("place_order sell_short 5 MSFT @ 9999",
                  lambda: b.place_order(
-                     OrderRequest("AAPL", Side.SELL_SHORT, 5, 9999.00, OrderType.LIMIT)))
+                     OrderRequest("MSFT", Side.SELL_SHORT, 5, 9999.00, OrderType.LIMIT)))
     if s is not None:
         vuelta = b.get_order(s.id)
         bien = vuelta.side == Side.SELL_SHORT
@@ -199,11 +205,22 @@ def main() -> int:
         fallos += (not aviso)
 
     # dejar la cuenta como estaba
+    #
+    # La limpieza NO puede tumbar la corrida: si el sandbox se niega a cancelar
+    # algo, eso no dice nada de lo que se estaba probando. Antes reventaba con un
+    # error y la corrida entera terminaba en rojo con todas las pruebas en verde.
     print("\n=== LIMPIEZA ===")
     vivas = b.get_open_orders()
+    canceladas = trabadas = 0
     for x in vivas:
-        b.cancel_order(x.id)
-    print(f"  cancele {len(vivas)} orden(es) que hubieran quedado vivas")
+        try:
+            b.cancel_order(x.id)
+            canceladas += 1
+        except Exception as e:  # noqa: BLE001
+            trabadas += 1
+            print(f"  (no se dejo cancelar {x.id} {x.symbol}: {str(e)[-60:]})")
+    print(f"  cancele {canceladas} orden(es) que hubieran quedado vivas"
+          + (f", {trabadas} no se dejaron" if trabadas else ""))
     time.sleep(1)
     print(f"  vivas al final: {len(b.get_open_orders())} | "
           f"posiciones: {len(b.get_positions())}")

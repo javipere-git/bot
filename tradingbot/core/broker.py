@@ -75,6 +75,25 @@ class Broker(ABC):
     #: None = del broker al que estas conectado, como corresponde.
     catalogo_origen: str | None = None
 
+    def operaciones(self, desde: str, hasta: str) -> list[dict]:
+        """Todas las EJECUCIONES de la cuenta entre dos fechas (YYYY-MM-DD).
+
+        Ojo con la diferencia: una ORDEN es lo que pediste, una EJECUCION es lo que
+        de verdad se hizo. Una orden puede llenarse en varios pedazos, a precios
+        distintos, o no llenarse nunca. Esto devuelve lo segundo, que es lo que sirve
+        para revisar como te fue.
+
+        Cada fila trae las mismas claves en todos los brokers, con None donde ese
+        broker no informa el dato:
+            fecha_hora (hora de NY), symbol, lado, cantidad, precio, importe,
+            comision, tasas, neto, order_id, id_ejecucion, notas
+
+        Medido el 17/08/2026 sobre 30 dias: Alpaca 3.008 ejecuciones en 6,9 s (31
+        paginas), Tradier 3.526 en 1,6 s (una llamada), Tastytrade 252 en 0,6 s.
+
+        Lista vacia = este broker no lo tiene."""
+        return []
+
     def orden_de_aviso(self, evento) -> tuple[str | None, "OrderStatus | None", Order | None]:
         """Traduce un aviso del canal de cuenta a datos de una orden.
 

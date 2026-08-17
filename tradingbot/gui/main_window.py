@@ -37,6 +37,7 @@ from .estado_ui import (
 )
 from .tema import aplicar_tema, es_oscuro
 from ..core.catalogo import guardar_catalogo
+from ..core.historial import guardar_operaciones, resumen as resumen_operaciones
 from ..core.models import OrderStatus, Side
 from ..core.observador_movimiento import ObservadorMovimiento
 from .sonidos import sonar_alerta, sonar_ejecucion
@@ -88,6 +89,13 @@ class _AvisoETB(QObject):
 class _AvisoCatalogo(QObject):
     """Lo mismo, para el catalogo completo del broker (que simbolos tiene bloqueados,
     prestables, etc.). Es otra clase para que un pedido no pise al otro."""
+
+    listo = Signal(object)
+    error = Signal(str)
+
+
+class _AvisoOperaciones(QObject):
+    """Lo mismo, para el historial de operaciones de la cuenta."""
 
     listo = Signal(object)
     error = Signal(str)
@@ -187,6 +195,7 @@ class MainWindow(QMainWindow):
         self.control.btn_catalogo.clicked.connect(self._bajar_catalogo)
         self.control.traer_bloqueadas = self._traer_bloqueadas
         self.control.btn_descargar_reporte.clicked.connect(self._abrir_reporte)
+        self.control.btn_operaciones.clicked.connect(self._bajar_operaciones)
         self._set_running(False)
 
         # --- reportes de las pasadas del dia (contadores del motor + neto por
@@ -782,6 +791,72 @@ class MainWindow(QMainWindow):
         self.control.append_log(
             f"Catalogo de {self._perfil.broker_nombre}: {len(filas):,} simbolo(s), "
             f"{bloqueadas:,} bloqueado(s) para abrir. Guardado en {ruta}"
+        )
+
+    # ---------- historial de operaciones de la cuenta ----------
+    def _bajar_operaciones(self) -> None:
+        """Baja a un archivo todas las ejecuciones de la cuenta entre dos fechas.
+
+        Los dos cuadros (las fechas y el 'guardar como') se abren ANTES de arrancar
+        el hilo: abrir uno desde el aviso del hilo colgaba la app en Windows."""
+        from .operaciones_dialog import DialogoOperaciones
+
+        dlg = DialogoOperaciones(self, broker=self._perfil.broker_nombre)
+        if not dlg.exec():
+            return
+        desde, hasta = dlg.fechas()
+        ruta, _ = QFileDialog.getSaveFileName(
+            self, "Guardar las operaciones",
+            f"operaciones_{self._perfil.broker_nombre.lower()}_{desde}_a_{hasta}.csv",
+            "CSV para Excel (*.csv)",
+        )
+        if not ruta:
+            self.control.append_log("Operaciones: descarga cancelada.")
+            return
+        try:
+            # conexion propia: compartir la del ladder entre hilos puede trabarse
+            broker = self._perfil.crear_broker()
+        except Exception as e:  # noqa: BLE001
+            self.control.append_log(f"Operaciones: no hay conexion con el broker ({e})")
+            return
+        self.control.btn_operaciones.setEnabled(False)
+        self.control.append_log(
+            f"Operaciones: pidiendo a {self._perfil.broker_nombre} lo operado "
+            f"del {desde} al {hasta}..."
+        )
+        aviso = _AvisoOperaciones()
+        aviso.listo.connect(lambda filas: self._operaciones_recibidas(filas, ruta))
+        aviso.error.connect(
+            lambda m: self.control.append_log(f"Operaciones: no se pudo traer ({m})")
+        )
+        for senal in (aviso.listo, aviso.error):
+            senal.connect(lambda *_: self.control.btn_operaciones.setEnabled(True))
+        self._aviso_ops = aviso             # referencia (si no, Python lo descarta)
+
+        def _trabajo():
+            try:
+                aviso.listo.emit(broker.operaciones(desde, hasta))
+            except Exception as e:  # noqa: BLE001
+                aviso.error.emit(str(e))
+
+        threading.Thread(target=_trabajo, daemon=True).start()
+
+    def _operaciones_recibidas(self, filas, ruta: str) -> None:
+        """Ya llego el historial. NO se abre ningun dialogo aca (ver _bajar_operaciones)."""
+        if not filas:
+            self.control.append_log(
+                f"Operaciones: {self._perfil.broker_nombre} no devolvio nada en esas "
+                f"fechas (o no ofrece el historial por API)."
+            )
+            return
+        try:
+            guardar_operaciones(filas, ruta)
+        except Exception as e:  # noqa: BLE001
+            self.control.append_log(f"Operaciones: no se pudo guardar ({e})")
+            return
+        self.control.append_log(
+            f"Operaciones de {self._perfil.broker_nombre}: {resumen_operaciones(filas)}. "
+            f"Guardado en {ruta}"
         )
 
     def _bot_escaneando(self, valor: bool) -> None:
