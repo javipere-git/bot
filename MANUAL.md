@@ -191,11 +191,20 @@ permite UNA sola conexion de streaming de datos a la vez (con Algo Trader Plus, 
 - **"Excluidas"** (15/08/2026). Simbolos que el bot **NO va a operar**, aunque esten
   en la watchlist. Se saltean **al arrancar**, antes de pedir ninguna cotizacion: no
   cuestan ni una llamada ni una vuelta.
-  - El cuadro tiene **dos listas separadas**, y esa separacion es todo el punto:
-    - **Mias**: las que excluis vos, por el motivo que sea.
+  - El cuadro tiene **varias listas separadas**, y esa separacion es todo el punto:
+    - **Las tuyas**: cuatro cuadros, cada uno con su **nombre editable**, para que
+      quede escrito **por que** esta excluido cada simbolo. Arrancan como
+      "Impuestos", "Sin liquidez", "Siempre pierdo" y "Otras", pero les podes
+      poner lo que quieras. Cuando el bot saltea uno, **el registro dice de que
+      lista salio**: *"Excluidas: salteo 2 simbolo(s). Impuestos: 1 (BBB) |
+      Sin liquidez: 1 (CCC)"*.
     - **Del broker**: las que el broker tiene **bloqueadas para abrir posicion**. Son
       cientos y cambian solas, asi que se renuevan con el boton **"Traer del broker"**
-      sin tocar las tuyas.
+      sin tocar ninguna de las tuyas.
+  - Editar una lista **no toca las otras**. Si un dia cambia el motivo de un simbolo,
+    lo movés de cuadro y listo.
+  - Si ya tenias un archivo del formato viejo (una sola lista sin nombre), se lee
+    igual: lo que tenias cargado cae en el primer cuadro y no se pierde nada.
   - Se guardan en `config/excluidas.txt`, que **si va al repositorio** (no tiene nada
     sensible): la misma lista te sigue a las tres PCs.
   - Medido el 15/08/2026: **Alpaca 863** bloqueadas de 14.234 (`tradable=false`),

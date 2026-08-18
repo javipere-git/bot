@@ -42,7 +42,10 @@ class LadderWorker(QObject):
     """
 
     log = Signal(str)
-    # (clave, salio_bien, id_real_de_la_orden)  -- el id llega solo al mandar
+    # (clave, salio_bien, ids_reales separados por espacio)
+    # Al MANDAR viene el id de la orden nueva. Al MOVER tambien, porque Alpaca y
+    # Tasty no mueven la orden: la reemplazan por otra con OTRO id, y la pantalla
+    # necesita saber cual para no quedarse esperando una que ya no existe.
     resultado = Signal(str, bool, str)
 
     def __init__(self, broker_provider) -> None:
@@ -82,16 +85,23 @@ class LadderWorker(QObject):
             self.resultado.emit(clave, False, "")
             return
         ok = True
+        nuevos = []
         for oid, dur in pares:
             try:
                 # se respeta la duracion que YA tiene la orden: si es de horario
                 # extendido (pre/post) y se manda "day", el broker la rechaza
-                broker.modify_order(oid, price=round(nuevo, 2), duration=dur)
+                movida = broker.modify_order(oid, price=round(nuevo, 2), duration=dur)
+                # El id que devuelve importa: Alpaca y Tasty NO mueven la orden, la
+                # reemplazan por una nueva con OTRO id. Si no se lo pasamos a la
+                # pantalla, ella se queda esperando el id viejo, que ya nunca vuelve,
+                # y la orden parpadea (desaparece hasta que llega la nueva).
+                if movida is not None and getattr(movida, "id", None):
+                    nuevos.append(str(movida.id))
                 self.log.emit(f"Ladder: orden {oid} movida a {nuevo:.2f}.")
             except Exception as e:  # noqa: BLE001
                 self.log.emit(f"Ladder: no se pudo mover ({e})")
                 ok = False
-        self.resultado.emit(clave, ok, "")
+        self.resultado.emit(clave, ok, " ".join(nuevos))
 
     @Slot(str, object)
     def cancelar(self, clave: str, ids) -> None:

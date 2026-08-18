@@ -52,26 +52,68 @@ carpeta = tempfile.mkdtemp(prefix="excluidas_")
 ruta = os.path.join(carpeta, "excluidas.txt")
 
 print("\n=== 1. Ida y vuelta: lo que guardas es lo que lees ===")
-excluidas.guardar(["aaa", "$bbb"], ["XXX", "YYY", "ZZZ"], ruta)
+excluidas.guardar([("Impuestos", ["aaa", "$bbb"]), ("Sin liquidez", ["ccc"])],
+                  ["XXX", "YYY", "ZZZ"], ruta)
 mias, broker = excluidas.leer(ruta)
-check(mias == ["AAA", "BBB"], "las mias vuelven en mayuscula y sin el $", f"{mias}")
+por_nombre = dict(mias)
+check(por_nombre["Impuestos"] == ["AAA", "BBB"],
+      "vuelven en mayuscula y sin el $", f"{por_nombre['Impuestos']}")
+check(por_nombre["Sin liquidez"] == ["CCC"], "y cada lista con lo suyo", f"{mias}")
 check(broker == ["XXX", "YYY", "ZZZ"], "las del broker vuelven enteras", f"{broker}")
-check(excluidas.todas(ruta) == {"AAA", "BBB", "XXX", "YYY", "ZZZ"},
-      "todas() junta las dos listas")
+check(len(mias) == excluidas.CUANTAS_MIAS,
+      "siempre vuelven los mismos cuadros, aunque esten vacios", f"{len(mias)}")
+
+print("\n=== 1b. Cada simbolo sabe DE QUE lista salio ===")
+todas = excluidas.todas(ruta)
+check(set(todas) == {"AAA", "BBB", "CCC", "XXX", "YYY", "ZZZ"},
+      "todas() junta todas las listas")
+check(todas["AAA"] == "Impuestos" and todas["CCC"] == "Sin liquidez",
+      "y dice de cual salio cada uno", f"{todas['AAA']} / {todas['CCC']}")
+check(todas["XXX"] == "bloqueadas por el broker",
+      "incluidas las del broker", f"{todas['XXX']}")
+check("AAA" in todas and "ZZZ" in todas,
+      "se sigue usando igual que antes: 'simbolo in excluidas'")
 
 print("\n=== 2. Renovar la del broker NO toca las mias ===")
 # esto es exactamente lo que hace el boton 'Traer del broker' + Guardar
 mias_antes, _ = excluidas.leer(ruta)
 excluidas.guardar(mias_antes, ["QQQ", "RRR"], ruta)
 mias, broker = excluidas.leer(ruta)
-check(mias == ["AAA", "BBB"], "las mias siguen ahi despues de renovar la otra", f"{mias}")
+check(dict(mias)["Impuestos"] == ["AAA", "BBB"],
+      "las mias siguen ahi despues de renovar la otra", f"{dict(mias)['Impuestos']}")
 check(broker == ["QQQ", "RRR"], "y la del broker quedo reemplazada, no sumada", f"{broker}")
 
-# y al reves: cambiar las mias no borra las del broker
-excluidas.guardar(["CCC"], broker, ruta)
+# y al reves: cambiar una lista mia no borra ni las otras ni la del broker
+mias2 = [("Impuestos", ["CCC"])] + mias_antes[1:]
+excluidas.guardar(mias2, broker, ruta)
 mias, broker = excluidas.leer(ruta)
-check(mias == ["CCC"] and broker == ["QQQ", "RRR"],
-      "y editando las mias tampoco se pierde la del broker", f"{mias} / {broker}")
+check(dict(mias)["Impuestos"] == ["CCC"] and dict(mias)["Sin liquidez"] == ["CCC"],
+      "editar una lista no toca las otras", f"{mias}")
+check(broker == ["QQQ", "RRR"], "ni la del broker", f"{broker}")
+
+print("\n=== 2b. Los nombres se pueden cambiar, y se guardan ===")
+excluidas.guardar([("Me fue mal", ["AAA"]), ("", ["BBB"])], [], ruta)
+mias, _ = excluidas.leer(ruta)
+check(mias[0] == ("Me fue mal", ["AAA"]), "el nombre nuevo vuelve tal cual", f"{mias[0]}")
+check(mias[1][0] and mias[1][1] == ["BBB"],
+      "y una lista sin nombre igual se guarda, con uno puesto", f"{mias[1]}")
+excluidas.guardar([("Con = y\nsaltos", ["AAA"])], [], ruta)
+mias, _ = excluidas.leer(ruta)
+check(mias[0][1] == ["AAA"] and "\n" not in mias[0][0] and "=" not in mias[0][0],
+      "un nombre con caracteres raros no rompe el archivo", f"{mias[0]}")
+
+print("\n=== 2c. Un archivo del formato viejo se sigue leyendo ===")
+ruta_vieja = os.path.join(carpeta, "vieja.txt")
+with open(ruta_vieja, "w", encoding="utf-8") as f:
+    f.write("# Simbolos que el bot NO va a operar.\n"
+            "# === MIAS (las excluis vos) ===\n"
+            "TSLA\nGME\n\n"
+            "# === DEL BROKER (bloqueadas para abrir) ===\n"
+            "QNRX\n")
+mias, broker = excluidas.leer(ruta_vieja)
+check(dict(mias)[excluidas.NOMBRES_POR_DEFECTO[0]] == ["TSLA", "GME"],
+      "lo que tenias cargado no se pierde: cae en el primer cuadro", f"{mias[0]}")
+check(broker == ["QNRX"], "y la del broker se lee igual", f"{broker}")
 
 print("\n=== 3. El motor saltea los excluidos sin pedirles ni la cotizacion ===")
 
@@ -112,6 +154,35 @@ br, motor = armar({"BBB"})
 motor.run_watchlist(["aaa", "bbb"])
 check([s.lower() for s in br.pedidos] == ["aaa"],
       "compara sin importar mayuscula/minuscula", f"pedidos: {br.pedidos}")
+
+print("\n=== 3b. El registro dice de QUE lista salio cada salteado ===")
+mensajes = []
+br = BrokerEspia()
+for s in ("AAA", "BBB", "CCC"):
+    br.set_quote(s, 100.00, 100.20, 300, 300, volume=1_000_000)
+cfg = EngineConfig(
+    side=Side.BUY, quantity=10,
+    order1=OrderConfig(10, OffsetUnit.PERCENT_SPREAD, 1.0),
+    order2=None, loop_watchlist=False,
+    excluidas={"BBB": "Impuestos", "CCC": "Sin liquidez"},
+)
+BotEngine(br, cfg, log=mensajes.append).run_watchlist(["AAA", "BBB", "CCC"])
+aviso = next((m for m in mensajes if m.startswith("Excluidas:")), "")
+check("Impuestos" in aviso and "Sin liquidez" in aviso and "BBB" in aviso,
+      "el registro nombra la lista y los simbolos", aviso)
+
+# y con un conjunto pelado (como lo pasaban los tests viejos) tampoco se rompe
+mensajes.clear()
+br2 = BrokerEspia()
+br2.set_quote("AAA", 100.00, 100.20, 300, 300, volume=1_000_000)
+cfg2 = EngineConfig(
+    side=Side.BUY, quantity=10,
+    order1=OrderConfig(10, OffsetUnit.PERCENT_SPREAD, 1.0),
+    order2=None, loop_watchlist=False, excluidas={"BBB"},
+)
+BotEngine(br2, cfg2, log=mensajes.append).run_watchlist(["AAA", "BBB"])
+aviso = next((m for m in mensajes if m.startswith("Excluidas:")), "")
+check("BBB" in aviso, "con un conjunto pelado tambien anda (sin motivo)", aviso)
 
 print("\n=== 4. Si esta TODO excluido, corta ===")
 br, motor = armar({"AAA", "BBB"})
@@ -290,18 +361,31 @@ from tradingbot.gui.control_panel import ControlPanel               # noqa: E402
 from tradingbot.gui.excluidas_dialog import DialogoExcluidas        # noqa: E402
 
 app = QApplication.instance() or QApplication([])
-excluidas.guardar(["MIA1", "MIA2"], ["VIEJA1"], ruta)
+excluidas.guardar([("Impuestos", ["MIA1"]), ("Sin liquidez", ["MIA2"])],
+                  ["VIEJA1"], ruta)
 dlg = DialogoExcluidas(ruta=ruta)
 mias_ui, broker_ui = dlg.listas()
-check(mias_ui == ["MIA1", "MIA2"] and broker_ui == ["VIEJA1"],
+check(len(dlg.filas) == excluidas.CUANTAS_MIAS,
+      f"hay {excluidas.CUANTAS_MIAS} cuadros para las tuyas", f"{len(dlg.filas)}")
+check(dict(mias_ui)["Impuestos"] == ["MIA1"]
+      and dict(mias_ui)["Sin liquidez"] == ["MIA2"] and broker_ui == ["VIEJA1"],
       "abre con cada lista en su caja", f"{mias_ui} / {broker_ui}")
 
 dlg.poner_del_broker(["NUEVA1", "NUEVA2"])      # esto hace 'Traer del broker'
 mias_ui, broker_ui = dlg.listas()
-check(mias_ui == ["MIA1", "MIA2"],
-      "traer del broker NO toca las mias (todo el punto del cuadro)", f"{mias_ui}")
+check(dict(mias_ui)["Impuestos"] == ["MIA1"]
+      and dict(mias_ui)["Sin liquidez"] == ["MIA2"],
+      "traer del broker NO toca ninguna de las tuyas (el punto del cuadro)",
+      f"{mias_ui}")
 check(broker_ui == ["NUEVA1", "NUEVA2"],
       "y reemplaza la del broker, no la suma a la vieja", f"{broker_ui}")
+
+# cambiarle el nombre a una lista desde la pantalla
+dlg.filas[0][0].setText("Impuestos 2027")
+dlg.filas[0][1].setPlainText("mia1 mia9")
+mias_ui, _ = dlg.listas()
+check(mias_ui[0] == ("Impuestos 2027", ["MIA1", "MIA9"]),
+      "el nombre y los simbolos se leen de la pantalla", f"{mias_ui[0]}")
 
 panel = ControlPanel()
 check(hasattr(panel, "btn_excluidas") and hasattr(panel, "btn_catalogo"),

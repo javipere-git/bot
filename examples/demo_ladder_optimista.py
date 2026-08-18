@@ -187,8 +187,14 @@ panel._resultado_del_worker(clave, True, "")
 panel._orders = []                                # el broker ya la saco
 panel._repoblar()
 it, _ = celda(panel, 100.02, C_BUY)
+check(it is not None and it.text().strip() != ""
+      and fondo(it) == colores("orden_pendiente").name(),
+      "sigue en gris un momento mas (ver la gracia, seccion 9)")
+panel._pend[clave]["t_ido"] = time.monotonic() - (panel.GRACIA + 0.1)
+panel._repoblar()
+it, _ = celda(panel, 100.02, C_BUY)
 check(not panel._pend and (it is None or it.text().strip() == ""),
-      "recien cuando el broker confirma, desaparece")
+      "y pasada la gracia desaparece del todo")
 
 print("\n=== 7. Vencimiento: si el broker nunca contesta, no queda un fantasma ===")
 clave = panel._pend_agregar({"tipo": "nueva", "compra": True, "qty": 9,
@@ -198,6 +204,130 @@ panel._repoblar()
 it, _ = celda(panel, 100.01, C_BUY)
 check(not panel._pend and (it is None or it.text().strip() == ""),
       f"se borra sola despues de {panel.TTL_PEND:.0f}s sin respuesta")
+
+print("\n=== 9. Sin parpadeos: la orden nunca desaparece y vuelve ===")
+# Los dos casos que se veian en pantalla el 17/08/2026: al mover una orden y al
+# apretar Cancelar todo, la orden desaparecia un instante y volvia a aparecer.
+# Aca se sigue el dibujo paso por paso; lo que se mira es que en NINGUN paso
+# intermedio quede el nivel vacio (parpadeo) ni con el doble de acciones.
+
+
+def hay_algo(precio, col):
+    it, _ = celda(panel, precio, col)
+    return it is not None and it.text().strip() != ""
+
+
+def cantidad_dibujada(precio, col):
+    it, _ = celda(panel, precio, col)
+    if it is None or not it.text().strip():
+        return 0
+    return int(it.text().split()[0])
+
+
+print("  -- al mover (Alpaca y Tasty le cambian el id a la orden) --")
+panel._pend.clear()
+panel._orders = [orden("vieja", Side.BUY, 100.02, 25)]
+panel._repoblar()
+clave = panel._pend_agregar({"tipo": "mover", "compra": True, "qty": 25,
+                             "precio": 100.05, "ids": ["vieja"], "origen": 100.02})
+# el broker contesta con la orden NUEVA, que tiene otro id
+panel._resultado_del_worker(clave, True, "nueva")
+pasos = []
+panel._orders = []                       # murio la vieja; la nueva todavia no llego
+panel._repoblar()
+pasos.append(("hueco", cantidad_dibujada(100.05, C_BUY)))
+panel._orders = [orden("nueva", Side.BUY, 100.05, 25)]
+panel._repoblar()
+pasos.append(("llego la nueva", cantidad_dibujada(100.05, C_BUY)))
+check(all(c == 25 for _, c in pasos),
+      "en ningun paso el nivel queda vacio ni con el doble", f"{pasos}")
+check(not hay_algo(100.02, C_BUY), "y no quedo nada en el precio viejo")
+panel._reconciliar()
+check(not panel._pend,
+      "cuando la nueva ya esta en su precio, el provisorio se retira")
+
+print("  -- al cancelar (una lectura atrasada la traia de vuelta) --")
+panel._pend.clear()
+panel._orders = [orden("id-c", Side.BUY, 100.02, 25)]
+panel._repoblar()
+clave = panel._pend_agregar(panel._marca_cancelacion(["id-c"]))
+panel._resultado_del_worker(clave, True, "")
+panel._orders = []                       # el aviso del broker: ya no esta
+panel._repoblar()
+gris_1 = fondo(celda(panel, 100.02, C_BUY)[0]) if hay_algo(100.02, C_BUY) else None
+panel._orders = [orden("id-c", Side.BUY, 100.02, 25)]   # lectura REST atrasada
+panel._repoblar()
+gris_2 = fondo(celda(panel, 100.02, C_BUY)[0]) if hay_algo(100.02, C_BUY) else None
+check(gris_1 == gris_2 == colores("orden_pendiente").name(),
+      "queda en gris todo el rato: una lectura atrasada no la revive en verde",
+      f"{gris_1} / {gris_2}")
+panel._orders = []
+panel._pend[clave]["t_ido"] = time.monotonic() - (panel.GRACIA + 0.1)
+panel._repoblar()
+check(not panel._pend and not hay_algo(100.02, C_BUY),
+      "y al final desaparece de verdad")
+
+print("  -- la gracia no tapa una orden que se lleno de verdad --")
+panel._pend.clear()
+panel._orders = [orden("id-f", Side.BUY, 100.02, 25)]
+panel._repoblar()
+clave = panel._pend_agregar({"tipo": "mover", "compra": True, "qty": 25,
+                             "precio": 100.05, "ids": ["id-f"], "origen": 100.02})
+panel._resultado_del_worker(clave, True, "id-g")
+panel._orders = []                       # se lleno: la nueva nunca va a figurar
+panel._repoblar()
+panel._pend[clave]["t_ido"] = time.monotonic() - (panel.GRACIA + 0.1)
+panel._repoblar()
+check(not panel._pend and not hay_algo(100.05, C_BUY),
+      "pasada la gracia el dibujo se va igual (no queda un fantasma)")
+
+print("  -- mientras el provisorio existe, la orden nueva queda tapada --")
+# Sin esto, en el instante en que conviven el dibujo provisorio y la orden ya
+# devuelta por el broker, el nivel muestra el DOBLE de acciones.
+panel._pend.clear()
+panel._orders = [orden("id-j", Side.BUY, 100.02, 25)]
+panel._repoblar()
+clave = panel._pend_agregar({"tipo": "mover", "compra": True, "qty": 25,
+                             "precio": 100.05, "ids": ["id-j"], "origen": 100.02})
+panel._resultado_del_worker(clave, True, "id-k")
+_, ocultos = panel._pend_dibujo(1)
+check("id-k" in ocultos and "id-j" in ocultos,
+      "el id viejo Y el nuevo estan los dos tapados", f"{sorted(ocultos)}")
+
+print("  -- y si no sabemos el id nuevo, no se dibuja dos veces --")
+panel._pend.clear()
+panel._orders = [orden("id-h", Side.BUY, 100.02, 25)]
+panel._repoblar()
+clave = panel._pend_agregar({"tipo": "mover", "compra": True, "qty": 25,
+                             "precio": 100.05, "ids": ["id-h"], "origen": 100.02})
+panel._resultado_del_worker(clave, True, "")        # el broker no dijo el id
+panel._orders = [orden("id-i", Side.BUY, 100.05, 25)]
+panel._repoblar()
+check(cantidad_dibujada(100.05, C_BUY) == 25,
+      "se ven 25, no 50", f"{cantidad_dibujada(100.05, C_BUY)}")
+
+print("  -- el hilo del ladder devuelve el id nuevo (de ahi sale todo esto) --")
+from tradingbot.gui.ladder_worker import LadderWorker            # noqa: E402
+
+
+class BrokerQueReemplaza:
+    """Como Alpaca y Tastytrade: mover una orden la reemplaza por otra con otro id."""
+
+    def modify_order(self, oid, price=None, quantity=None, duration=None):
+        return orden(f"{oid}-nueva", Side.BUY, price, 25)
+
+
+recibido = []
+w = LadderWorker(lambda: BrokerQueReemplaza())
+w.resultado.connect(lambda c, ok, ids: recibido.append((c, ok, ids)))
+w.mover("k1", [("id-1", None)], 100.05)
+check(recibido and recibido[0][2] == "id-1-nueva",
+      "el hilo pasa el id de la orden NUEVA, no una cadena vacia",
+      f"{recibido}")
+recibido.clear()
+w.mover("k2", [("a", None), ("b", None)], 100.05)
+check(recibido and recibido[0][2] == "a-nueva b-nueva",
+      "y si movio varias, las pasa todas", f"{recibido}")
 
 print("\n=== Los cuatro estados son colores DISTINTOS ===")
 tonos = {n: colores(n).name() for n in

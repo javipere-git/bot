@@ -71,6 +71,24 @@ _RECHAZO_SIMBOLO = (
 )
 
 
+def _por_motivo(fuera, excluidas) -> str:
+    """Arma el detalle del salteo agrupado por la lista de la que salio cada uno.
+
+    Las excluidas vienen como diccionario simbolo -> nombre de la lista, para poder
+    decir POR QUE se saltea. Si alguien pasa un conjunto pelado (los tests viejos),
+    igual funciona: se listan los simbolos sin motivo."""
+    if not isinstance(excluidas, dict):
+        return ", ".join(fuera[:8]) + ("..." if len(fuera) > 8 else "")
+    grupos: dict[str, list[str]] = {}
+    for s in fuera:
+        grupos.setdefault(excluidas[s.upper()], []).append(s)
+    partes = []
+    for motivo, simbolos in sorted(grupos.items(), key=lambda x: -len(x[1])):
+        muestra = ", ".join(simbolos[:5]) + ("..." if len(simbolos) > 5 else "")
+        partes.append(f"{motivo}: {len(simbolos)} ({muestra})")
+    return " | ".join(partes)
+
+
 class BotEngine:
     MAX_READ_FAILS = 10  # lecturas fallidas seguidas que toman como "sin conexion"
 
@@ -370,8 +388,8 @@ class BotEngine:
             fuera = [s for s in symbols if s.upper() in excluidas]
             if fuera:
                 symbols = [s for s in symbols if s.upper() not in excluidas]
-                self._log(f"Excluidas: salteo {len(fuera)} simbolo(s) de la lista "
-                          f"({', '.join(fuera[:8])}{'...' if len(fuera) > 8 else ''})")
+                self._log(f"Excluidas: salteo {len(fuera)} simbolo(s). "
+                          f"{_por_motivo(fuera, excluidas)}")
             if not symbols:
                 self._log("*** Todos los simbolos de la watchlist estan excluidos. ***")
                 return Outcome.STOPPED

@@ -1,18 +1,25 @@
 """
 Ventanita para editar los simbolos excluidos.
 
-Dos cuadros separados, y esa separacion es todo el punto: las que excluis VOS y
-las que el BROKER tiene bloqueadas se renuevan por su cuenta. Si estuvieran
-juntas, actualizar la lista del broker (que cambia sola y son cientos) te haria
-volver a cargar las tuyas cada vez.
+Varias cajas separadas, y esa separacion es todo el punto:
+
+  - LAS TUYAS van en varias listas con NOMBRE editable (impuestos, sin liquidez,
+    siempre pierdo...). Sin el motivo escrito, en un mes la lista es una bolsa de
+    simbolos sueltos que despues no sabes si podes sacar. Ademas, cuando el bot
+    saltea uno, el registro dice de que lista salio.
+  - LA DEL BROKER va aparte porque se renueva sola y son cientos: si estuviera
+    mezclada, actualizarla te haria volver a cargar las tuyas cada vez.
 """
 from __future__ import annotations
 
 from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
+    QGridLayout,
+    QGroupBox,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QPlainTextEdit,
     QPushButton,
     QVBoxLayout,
@@ -26,7 +33,7 @@ class DialogoExcluidas(QDialog):
         super().__init__(parent)
         self.ruta = ruta            # None = el archivo de siempre (config/excluidas.txt)
         self.setWindowTitle("Simbolos excluidos")
-        self.resize(560, 460)
+        self.resize(680, 620)
         lay = QVBoxLayout(self)
 
         lay.addWidget(QLabel(
@@ -36,10 +43,22 @@ class DialogoExcluidas(QDialog):
 
         mias, broker = excluidas.leer(ruta)
 
-        lay.addWidget(QLabel("<b>Mias</b> — las que excluis vos, por el motivo que sea"))
-        self.ed_mias = QPlainTextEdit(" ".join(mias))
-        self.ed_mias.setPlaceholderText("Ej.:  ABCD  EFGH  IJKL")
-        lay.addWidget(self.ed_mias, 1)
+        g_mias = QGroupBox("Mias — cada lista con su motivo (el nombre se puede cambiar)")
+        grilla = QGridLayout(g_mias)
+        self.filas = []
+        for i, (nombre, simbolos) in enumerate(mias):
+            ed_nombre = QLineEdit(nombre)
+            ed_nombre.setPlaceholderText("Nombre de la lista")
+            ed_nombre.setToolTip(
+                "El motivo por el que excluis estos. Cuando el bot saltee uno,\n"
+                "el registro va a decir de que lista salio.")
+            ed_simbolos = QPlainTextEdit(" ".join(simbolos))
+            ed_simbolos.setPlaceholderText("Ej.:  ABCD  EFGH  IJKL")
+            ed_simbolos.setMinimumHeight(70)
+            grilla.addWidget(ed_nombre, (i // 2) * 2, i % 2)
+            grilla.addWidget(ed_simbolos, (i // 2) * 2 + 1, i % 2)
+            self.filas.append((ed_nombre, ed_simbolos))
+        lay.addWidget(g_mias, 2)
 
         fila = QHBoxLayout()
         fila.addWidget(QLabel("<b>Del broker</b> — bloqueadas para abrir posicion"))
@@ -73,6 +92,8 @@ class DialogoExcluidas(QDialog):
         self.ed_broker.setPlainText(" ".join(sorted(set(simbolos))))
         self.lbl_estado.setText(f"Traidos {len(set(simbolos))} simbolos del broker.")
 
-    def listas(self) -> tuple[list[str], list[str]]:
-        return (excluidas._limpiar(self.ed_mias.toPlainText()),
-                excluidas._limpiar(self.ed_broker.toPlainText()))
+    def listas(self) -> tuple[list[tuple[str, list[str]]], list[str]]:
+        """Devuelve (mias, del_broker). `mias` son pares (nombre, simbolos)."""
+        mias = [(ed_n.text(), excluidas._limpiar(ed_s.toPlainText()))
+                for ed_n, ed_s in self.filas]
+        return (mias, excluidas._limpiar(self.ed_broker.toPlainText()))

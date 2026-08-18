@@ -218,9 +218,11 @@ class ControlPanel(QWidget):
         if dlg.exec():
             mias, broker = dlg.listas()
             ruta = excluidas.guardar(mias, broker)
+            detalle = ", ".join(f"{n}: {len(s)}" for n, s in mias if s) or "ninguna tuya"
             self.append_log(
-                f"Excluidas: {len(mias)} tuya(s) + {len(broker)} del broker "
-                f"= {len(set(mias) | set(broker))} simbolo(s). Guardado en {ruta}"
+                f"Excluidas: {detalle} | del broker: {len(broker)}. "
+                f"En total {len(excluidas.todas(dlg.ruta)):,} simbolo(s). "
+                f"Guardado en {ruta}"
             )
 
     def _grupo_entrada(self) -> QGroupBox:

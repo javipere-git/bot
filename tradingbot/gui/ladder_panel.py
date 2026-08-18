@@ -367,6 +367,11 @@ class LadderPanel(QWidget):
     # de cada accion.
     TTL_PEND = 10.0      # segundos: si el broker no contesta, se borra el dibujo
     DESTELLO = 1.5       # segundos que queda visible una rechazada
+    # Segundos que el dibujo provisorio sigue puesto DESPUES de que la orden vieja
+    # desaparecio. Es lo que tapa los dos parpadeos: al mover, el hueco entre que
+    # muere la orden vieja y llega la nueva con otro id; al cancelar, una lectura
+    # REST atrasada que trae viva a una orden que el aviso ya dio por muerta.
+    GRACIA = 2.0
 
     def _clave_nueva(self) -> str:
         self._n_clave += 1
@@ -379,6 +384,7 @@ class LadderPanel(QWidget):
         datos["estado"] = "en_vuelo"
         datos["t"] = time.monotonic()
         datos["t_fin"] = None
+        datos["t_ido"] = None       # desde cuando la orden ya no figura (ver GRACIA)
         self._pend[clave] = datos
         self._repoblar()
         return clave
@@ -422,9 +428,12 @@ class LadderPanel(QWidget):
             if ahora - d["t"] > self.TTL_PEND:
                 # Nunca dejar un dibujo colgado: si el broker no contesto en 10s, se
                 # borra y se avisa. Mejor no mostrar nada que mostrar un fantasma.
+                # El aviso es SOLO cuando de verdad no contesto: una confirmada que
+                # tardo en reflejarse no es un problema y no hay que asustar con el.
+                if d["estado"] != "confirmada":
+                    self._log("Ladder: sin confirmacion del broker; saco el dibujo "
+                              "provisorio (mira las ordenes abiertas).")
                 del self._pend[clave]
-                self._log("Ladder: sin confirmacion del broker; saco el dibujo "
-                          "provisorio (mira las ordenes abiertas).")
                 continue
             if d["estado"] != "confirmada":
                 continue
@@ -433,16 +442,38 @@ class LadderPanel(QWidget):
                 if d.get("id_real") and str(d["id_real"]) in reales:
                     del self._pend[clave]
             elif d["tipo"] == "cancelar":
-                if not any(str(i) in reales for i in d["ids"]):
-                    del self._pend[clave]
+                if any(str(i) in reales for i in d["ids"]):
+                    d["t_ido"] = None           # sigue viva: se espera
+                else:
+                    self._soltar_tras_gracia(clave, d, ahora)
             elif d["tipo"] == "mover":
-                movidas = [o for o in self._orders
-                           if str(o.id) in {str(i) for i in d["ids"]}]
+                # Se busca por el id NUEVO cuando el broker lo dio: Alpaca y Tasty
+                # reemplazan la orden al moverla, asi que el id viejo no vuelve nunca.
+                nuevas = [i for i in str(d.get("id_real") or "").split() if i]
+                buscar = set(nuevas) or {str(i) for i in d["ids"]}
+                movidas = [o for o in self._orders if str(o.id) in buscar]
                 if movidas and all(o.price and abs(o.price - d["precio"]) < 0.005
                                    for o in movidas):
                     del self._pend[clave]
-                elif not movidas:
-                    del self._pend[clave]   # el broker le cambio el id (Alpaca/Tasty)
+                elif movidas:
+                    d["t_ido"] = None           # esta, pero todavia en el precio viejo
+                elif nuevas:
+                    self._soltar_tras_gracia(clave, d, ahora)
+                else:
+                    # No sabemos el id nuevo, asi que tampoco lo podemos ocultar:
+                    # esperar dibujaria la orden dos veces. Se saca el provisorio.
+                    del self._pend[clave]
+
+    def _soltar_tras_gracia(self, clave: str, d: dict, ahora: float) -> None:
+        """La orden ya no figura. NO se borra el dibujo al instante: ese hueco es
+        justo lo que se ve como un parpadeo (la orden desaparece y vuelve). Mientras
+        el dibujo siga puesto, sus ids quedan ocultos y no puede revivir en pantalla.
+        Si pasada la gracia sigue sin figurar, es que de verdad no esta (se lleno o
+        se cancelo) y el dibujo se va."""
+        if d.get("t_ido") is None:
+            d["t_ido"] = ahora
+        elif ahora - d["t_ido"] >= self.GRACIA:
+            del self._pend[clave]
 
     def _pend_dibujo(self, step_c: int):
         """Devuelve (por_nivel, ocultos) para mezclar con las ordenes reales.
@@ -452,6 +483,10 @@ class LadderPanel(QWidget):
         for d in self._pend.values():
             for i in d.get("ids", []):
                 ocultos.add(str(i))
+            # tambien el id NUEVO: si el broker reemplazo la orden y ya la devolvio,
+            # se dibuja una sola vez (el provisorio), no dos
+            for i in str(d.get("id_real") or "").split():
+                ocultos.add(i)
             precio = d.get("precio")
             if precio is None:
                 continue
@@ -1108,11 +1143,14 @@ class LadderPanel(QWidget):
             self.pedir_mover.emit(clave, pares, round(nuevo, 2))
             return
         ok = True
+        nuevos = []
         for oid, dur in pares:                      # sin hilo: camino directo
             try:
-                broker.modify_order(oid, price=round(nuevo, 2), duration=dur)
+                movida = broker.modify_order(oid, price=round(nuevo, 2), duration=dur)
+                if movida is not None and getattr(movida, "id", None):
+                    nuevos.append(str(movida.id))   # Alpaca/Tasty cambian el id
                 self._log(f"Ladder: orden {oid} movida a {nuevo:.2f}.")
             except Exception as e:  # noqa: BLE001
                 self._log(f"Ladder: no se pudo mover ({e})")
                 ok = False
-        self._resultado_del_worker(clave, ok, "")
+        self._resultado_del_worker(clave, ok, " ".join(nuevos))
