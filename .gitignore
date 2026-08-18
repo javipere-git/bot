@@ -29,3 +29,14 @@ reportes/
 
 # Codigo de referencia de Marian (propiedad de el; solo referencia visual)
 referencia_marian/
+
+# Informes que genera la app (catalogo, ejecuciones, ordenes, trades). El cuadro
+# de "guardar como" ofrece por defecto la carpeta de la app, asi que terminan
+# aca sin querer. Tienen tus operaciones REALES: no van al repositorio.
+*.csv
+!config/*.csv
+catalogo_*.csv
+operaciones_*.csv
+ordenes_*.csv
+trades_*.csv
+etb_*.txt
