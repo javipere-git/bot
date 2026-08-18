@@ -15,8 +15,18 @@ Si estuvieran todas juntas, cada vez que quisieras actualizar la del broker
 tendrias que volver a cargar las tuyas, y no sabrias cual sacar cuando cambia el
 motivo. Separadas, cada una se renueva sin tocar las otras.
 
-El archivo es de texto y vive en config/excluidas.txt, que SI se sube al repo
-(no tiene nada sensible): asi la lista te sigue a las tres PCs sola.
+SON DOS ARCHIVOS, y esto tambien tiene su porque (aprendido a los golpes el
+18/08/2026, cuando la actualizacion se trabo en la PC de Tasty):
+
+  config/excluidas.txt         LAS TUYAS. Va al repo y te sigue a las tres PCs.
+                               Son tus criterios: no dependen del broker.
+  config/excluidas_broker.txt  LA DEL BROKER. NO va al repo, es de cada PC.
+
+La del broker no puede viajar: es DISTINTA en cada broker. Medido el 15/08/2026,
+Alpaca bloquea 863 simbolos y Tastytrade 394, y no son los mismos. Mandarle a la
+PC de Tasty la lista de Alpaca no solo no sirve: excluye simbolos que Tasty si
+opera. Ademas la reescribe cada vez que apretas "Traer del broker", asi que si
+viajara chocaria con el repo en cada actualizacion (fue exactamente lo que paso).
 """
 from __future__ import annotations
 
@@ -34,6 +44,13 @@ CUANTAS_MIAS = len(NOMBRES_POR_DEFECTO)
 
 _RAIZ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 RUTA = os.path.join(_RAIZ, "config", "excluidas.txt")
+
+
+def _ruta_broker(ruta: str | None) -> str:
+    """El archivo de la lista del broker, al lado del de las tuyas."""
+    base = ruta or RUTA
+    raiz, ext = os.path.splitext(base)
+    return f"{raiz}_broker{ext or '.txt'}"
 
 
 def _limpiar(texto: str) -> list[str]:
@@ -70,10 +87,18 @@ def leer(ruta: str | None = None) -> tuple[list[tuple[str, list[str]]], list[str
         with open(ruta or RUTA, encoding="utf-8") as f:
             texto = f.read()
     except OSError:
-        return (vacias, [])
+        texto = ""
 
     arriba, _, abajo = texto.partition(_SEP_BROKER)
-    del_broker = _limpiar(abajo)
+    try:
+        with open(_ruta_broker(ruta), encoding="utf-8") as f:
+            del_broker = _limpiar(f.read())
+    except OSError:
+        # Todavia no existe el archivo aparte: se toma la seccion que quedo dentro
+        # del archivo viejo, asi la primera actualizacion no te borra la lista.
+        del_broker = _limpiar(abajo)
+    if not texto:
+        return (vacias, del_broker)
 
     mias: list[tuple[str, list[str]]] = []
     bloque: list[str] = []
@@ -105,16 +130,18 @@ def leer(ruta: str | None = None) -> tuple[list[tuple[str, list[str]]], list[str
 
 
 def guardar(mias, del_broker, ruta: str | None = None) -> str:
-    """Escribe todas las listas, cada una en su seccion. Devuelve la ruta.
+    """Escribe las listas en SUS DOS archivos. Devuelve la ruta de las tuyas.
 
     `mias` es una lista de (nombre, simbolos). Se guardan TODAS, incluso las
     vacias: el cuadro tiene que volver a abrirse con los mismos nombres."""
     ruta = ruta or RUTA
     os.makedirs(os.path.dirname(ruta), exist_ok=True)
     partes = [
-        "# Simbolos que el bot NO va a operar.",
+        "# Simbolos que VOS decidiste no operar. Este archivo SI va al repositorio:",
+        "# son tus criterios, no dependen del broker, y te siguen a las tres PCs.",
+        "# La lista de bloqueadas del broker va aparte, en excluidas_broker.txt,",
+        "# porque es distinta en cada broker y se rehace con un boton.",
         "# Cada lista tiene su nombre para saber POR QUE esta excluido cada uno.",
-        "# Se edita desde la app (boton 'Excluidas'); tambien se puede a mano.",
         "",
     ]
     for i, (nombre, simbolos) in enumerate(mias):
@@ -122,12 +149,20 @@ def guardar(mias, del_broker, ruta: str | None = None) -> str:
         partes += _limpiar("\n".join(simbolos) if not isinstance(simbolos, str)
                            else simbolos)
         partes.append("")
-    partes.append(_SEP_BROKER)
-    partes += _limpiar("\n".join(del_broker) if not isinstance(del_broker, str)
-                       else del_broker)
-    partes.append("")
     with open(ruta, "w", encoding="utf-8") as f:
         f.write("\n".join(partes))
+
+    del_broker = _limpiar("\n".join(del_broker) if not isinstance(del_broker, str)
+                          else del_broker)
+    cabecera = [
+        "# Simbolos que EL BROKER tiene bloqueados para abrir posicion.",
+        "# Este archivo NO va al repositorio: es distinto en cada broker (medido el",
+        "# 15/08/2026: Alpaca 863, Tastytrade 394) y lo rehace el boton",
+        "# 'Traer del broker'. Cada PC tiene el suyo.",
+        "",
+    ]
+    with open(_ruta_broker(ruta), "w", encoding="utf-8") as f:
+        f.write("\n".join(cabecera + del_broker + [""]))
     return ruta
 
 

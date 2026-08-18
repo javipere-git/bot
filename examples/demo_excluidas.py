@@ -102,6 +102,48 @@ mias, _ = excluidas.leer(ruta)
 check(mias[0][1] == ["AAA"] and "\n" not in mias[0][0] and "=" not in mias[0][0],
       "un nombre con caracteres raros no rompe el archivo", f"{mias[0]}")
 
+print("\n=== 2b2. Son DOS archivos: las tuyas viajan, la del broker no ===")
+# El 18/08/2026 la actualizacion se trabo en la PC de Tasty justamente por esto:
+# la lista del broker viajaba con el repositorio, y es distinta en cada broker.
+ruta_dos = os.path.join(carpeta, "dos.txt")
+excluidas.guardar([("Impuestos", ["AAA"])], ["ZZZ", "WWW"], ruta_dos)
+ruta_br = excluidas._ruta_broker(ruta_dos)
+check(os.path.exists(ruta_dos) and os.path.exists(ruta_br),
+      "se escriben los dos archivos", f"{os.path.basename(ruta_br)}")
+mias_txt = open(ruta_dos, encoding="utf-8").read()
+check("ZZZ" not in mias_txt and "AAA" in mias_txt,
+      "la del broker NO queda dentro del archivo que va al repositorio")
+br_txt = open(ruta_br, encoding="utf-8").read()
+check("ZZZ" in br_txt and "AAA" not in br_txt,
+      "y las tuyas no quedan dentro del archivo del broker")
+mias, broker = excluidas.leer(ruta_dos)
+check(dict(mias)["Impuestos"] == ["AAA"] and broker == ["ZZZ", "WWW"],
+      "y al leer vuelven las dos, como si fuera uno solo", f"{broker}")
+# renovar la del broker no toca el archivo que viaja
+excluidas.guardar(mias, ["ZZZ", "WWW"], ruta_dos)     # deja los 4 cuadros escritos
+antes = open(ruta_dos, encoding="utf-8").read()
+excluidas.guardar(mias, ["QQQ"], ruta_dos)            # ahora SOLO cambia la del broker
+check(open(ruta_dos, encoding="utf-8").read() == antes,
+      "traer la lista del broker de nuevo NO modifica el archivo del repositorio "
+      "(por eso ya no puede chocar)")
+
+print("\n=== 2b3. Al actualizar, la lista del broker que ya tenias no se pierde ===")
+# Un archivo del formato de ayer, con la del broker adentro y sin archivo aparte
+ruta_mig = os.path.join(carpeta, "migra.txt")
+with open(ruta_mig, "w", encoding="utf-8") as f:
+    f.write("# === MIAS: Impuestos ===\nAAA\n\n"
+            "# === DEL BROKER (bloqueadas para abrir) ===\nBLOQ1\nBLOQ2\n")
+mias, broker = excluidas.leer(ruta_mig)
+check(broker == ["BLOQ1", "BLOQ2"],
+      "se lee del archivo viejo mientras no exista el nuevo", f"{broker}")
+excluidas.guardar(mias, broker, ruta_mig)      # el primer guardado los separa
+check(os.path.exists(excluidas._ruta_broker(ruta_mig)),
+      "y al guardar queda partido en dos")
+check("BLOQ1" not in open(ruta_mig, encoding="utf-8").read(),
+      "sin la del broker en el archivo que viaja")
+mias, broker = excluidas.leer(ruta_mig)
+check(broker == ["BLOQ1", "BLOQ2"], "sin perder nada", f"{broker}")
+
 print("\n=== 2c. Un archivo del formato viejo se sigue leyendo ===")
 ruta_vieja = os.path.join(carpeta, "vieja.txt")
 with open(ruta_vieja, "w", encoding="utf-8") as f:

@@ -205,8 +205,16 @@ permite UNA sola conexion de streaming de datos a la vez (con Algo Trader Plus, 
     lo movés de cuadro y listo.
   - Si ya tenias un archivo del formato viejo (una sola lista sin nombre), se lee
     igual: lo que tenias cargado cae en el primer cuadro y no se pierde nada.
-  - Se guardan en `config/excluidas.txt`, que **si va al repositorio** (no tiene nada
-    sensible): la misma lista te sigue a las tres PCs.
+  - **Son dos archivos, y conviene saber por que** (aprendido el 18/08/2026, cuando
+    la actualizacion se trabo en una PC):
+    - `config/excluidas.txt` — **las tuyas**. SI va al repositorio: son tus
+      criterios, no dependen del broker, y te siguen a las tres PCs.
+    - `config/excluidas_broker.txt` — **la del broker**. NO va al repositorio: es
+      **distinta en cada broker** (Alpaca bloquea 863, Tastytrade 394, y no son los
+      mismos) y la rehace el boton "Traer del broker". Cada PC tiene la suya.
+  - Si estuvieran juntas, mandarle a la PC de Tasty la lista de Alpaca no solo no
+    serviria: **excluiria simbolos que Tasty si opera**. Y como la app la reescribe
+    en cada refresco, chocaria con el repositorio en cada actualizacion.
   - Medido el 15/08/2026: **Alpaca 863** bloqueadas de 14.234 (`tradable=false`),
     **Tastytrade 394** de 13.194 (`is-closing-only`: solo dejan CERRAR). Tradier no
     ofrece esta lista.

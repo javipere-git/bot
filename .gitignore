@@ -1,5 +1,11 @@
 # Credenciales: NUNCA subir tokens
 config/credentials.ini
+
+# La lista de bloqueadas DEL BROKER es de cada PC: es distinta en cada broker
+# (Alpaca 863, Tastytrade 394) y se rehace con el boton "Traer del broker".
+# Si viajara con el repo, chocaria en cada actualizacion. Tus propias excluidas
+# (config/excluidas.txt) SI van al repo y te siguen a las tres PCs.
+config/excluidas_broker.txt
 *.env
 .env
 
