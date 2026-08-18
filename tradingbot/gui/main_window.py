@@ -37,7 +37,19 @@ from .estado_ui import (
 )
 from .tema import aplicar_tema, es_oscuro
 from ..core.catalogo import guardar_catalogo
-from ..core.historial import guardar_operaciones, resumen as resumen_operaciones
+from ..core.historial import (
+    filtrar_por_estado,
+    guardar_operaciones,
+    guardar_ordenes,
+    resumen as resumen_operaciones,
+    resumen_ordenes,
+)
+from ..core.planilla import guardar as guardar_planilla
+from ..core.round_trips import (
+    COLUMNAS as COLUMNAS_TRADES,
+    armar as armar_round_trips,
+    resumen as resumen_trades,
+)
 from ..core.models import OrderStatus, Side
 from ..core.observador_movimiento import ObservadorMovimiento
 from .sonidos import sonar_alerta, sonar_ejecucion
@@ -793,41 +805,45 @@ class MainWindow(QMainWindow):
             f"{bloqueadas:,} bloqueado(s) para abrir. Guardado en {ruta}"
         )
 
-    # ---------- historial de operaciones de la cuenta ----------
+    # ---------- reportes de la cuenta (ejecuciones / ordenes / trades) ----------
     def _bajar_operaciones(self) -> None:
-        """Baja a un archivo todas las ejecuciones de la cuenta entre dos fechas.
+        """Baja a un archivo un reporte de la cuenta entre dos fechas.
 
-        Los dos cuadros (las fechas y el 'guardar como') se abren ANTES de arrancar
-        el hilo: abrir uno desde el aviso del hilo colgaba la app en Windows."""
-        from .operaciones_dialog import DialogoOperaciones
+        Los dos cuadros (el del reporte y el 'guardar como') se abren ANTES de
+        arrancar el hilo: abrir uno desde el aviso del hilo colgaba la app."""
+        from .operaciones_dialog import ORDENES, TRADES, DialogoOperaciones
 
         dlg = DialogoOperaciones(self, broker=self._perfil.broker_nombre)
         if not dlg.exec():
             return
+        tipo = dlg.tipo()
+        estados = dlg.estados()
         desde, hasta = dlg.fechas()
+        nombre = {TRADES: "trades", ORDENES: "ordenes"}.get(tipo, "ejecuciones")
         ruta, _ = QFileDialog.getSaveFileName(
-            self, "Guardar las operaciones",
-            f"operaciones_{self._perfil.broker_nombre.lower()}_{desde}_a_{hasta}.csv",
+            self, "Guardar el reporte",
+            f"{nombre}_{self._perfil.broker_nombre.lower()}_{desde}_a_{hasta}.csv",
             "CSV para Excel (*.csv)",
         )
         if not ruta:
-            self.control.append_log("Operaciones: descarga cancelada.")
+            self.control.append_log("Reportes: descarga cancelada.")
             return
         try:
             # conexion propia: compartir la del ladder entre hilos puede trabarse
             broker = self._perfil.crear_broker()
         except Exception as e:  # noqa: BLE001
-            self.control.append_log(f"Operaciones: no hay conexion con el broker ({e})")
+            self.control.append_log(f"Reportes: no hay conexion con el broker ({e})")
             return
         self.control.btn_operaciones.setEnabled(False)
         self.control.append_log(
-            f"Operaciones: pidiendo a {self._perfil.broker_nombre} lo operado "
+            f"Reportes: pidiendo a {self._perfil.broker_nombre} las {nombre} "
             f"del {desde} al {hasta}..."
         )
         aviso = _AvisoOperaciones()
-        aviso.listo.connect(lambda filas: self._operaciones_recibidas(filas, ruta))
+        aviso.listo.connect(
+            lambda filas: self._reporte_recibido(filas, ruta, tipo, estados))
         aviso.error.connect(
-            lambda m: self.control.append_log(f"Operaciones: no se pudo traer ({m})")
+            lambda m: self.control.append_log(f"Reportes: no se pudo traer ({m})")
         )
         for senal in (aviso.listo, aviso.error):
             senal.connect(lambda *_: self.control.btn_operaciones.setEnabled(True))
@@ -835,28 +851,58 @@ class MainWindow(QMainWindow):
 
         def _trabajo():
             try:
-                aviso.listo.emit(broker.operaciones(desde, hasta))
+                # los trades salen de las ejecuciones: no cuestan una llamada aparte
+                if tipo == ORDENES:
+                    aviso.listo.emit(broker.ordenes_historicas(desde, hasta))
+                else:
+                    aviso.listo.emit(broker.operaciones(desde, hasta))
             except Exception as e:  # noqa: BLE001
                 aviso.error.emit(str(e))
 
         threading.Thread(target=_trabajo, daemon=True).start()
 
-    def _operaciones_recibidas(self, filas, ruta: str) -> None:
-        """Ya llego el historial. NO se abre ningun dialogo aca (ver _bajar_operaciones)."""
+    def _reporte_recibido(self, filas, ruta: str, tipo: str, estados) -> None:
+        """Ya llego. NO se abre ningun dialogo aca (ver _bajar_operaciones)."""
+        from .operaciones_dialog import ORDENES, TRADES
+
         if not filas:
+            falta = (" Tradier no ofrece el historial de ordenes: su API solo guarda "
+                     "las del dia." if tipo == ORDENES else "")
             self.control.append_log(
-                f"Operaciones: {self._perfil.broker_nombre} no devolvio nada en esas "
-                f"fechas (o no ofrece el historial por API)."
+                f"Reportes: {self._perfil.broker_nombre} no devolvio nada en esas "
+                f"fechas.{falta}"
             )
             return
         try:
-            guardar_operaciones(filas, ruta)
+            if tipo == ORDENES:
+                elegidas = filtrar_por_estado(filas, estados)
+                if not elegidas:
+                    self.control.append_log(
+                        f"Reportes: de {len(filas):,} orden(es), ninguna esta en los "
+                        f"estados que pediste. No se guardo nada."
+                    )
+                    return
+                guardar_ordenes(elegidas, ruta)
+                detalle = resumen_ordenes(elegidas)
+            elif tipo == TRADES:
+                cerrados, sueltas = armar_round_trips(filas)
+                if not cerrados:
+                    self.control.append_log(
+                        f"Reportes: {len(filas):,} ejecucion(es), pero no se cerro "
+                        f"ningun trade completo en esas fechas. Probá un rango mas "
+                        f"largo: la salida puede haber quedado afuera."
+                    )
+                    return
+                guardar_planilla(cerrados, COLUMNAS_TRADES, ruta)
+                detalle = resumen_trades(cerrados, sueltas)
+            else:
+                guardar_operaciones(filas, ruta)
+                detalle = resumen_operaciones(filas)
         except Exception as e:  # noqa: BLE001
-            self.control.append_log(f"Operaciones: no se pudo guardar ({e})")
+            self.control.append_log(f"Reportes: no se pudo guardar ({e})")
             return
         self.control.append_log(
-            f"Operaciones de {self._perfil.broker_nombre}: {resumen_operaciones(filas)}. "
-            f"Guardado en {ruta}"
+            f"Reportes de {self._perfil.broker_nombre}: {detalle}. Guardado en {ruta}"
         )
 
     def _bot_escaneando(self, valor: bool) -> None:

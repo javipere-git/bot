@@ -14,9 +14,10 @@ lo abra en columnas de una.
 """
 from __future__ import annotations
 
-import csv
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
+
+from .planilla import guardar as _guardar_planilla
 
 NY = ZoneInfo("America/New_York")
 
@@ -35,6 +36,27 @@ COLUMNAS = [
     ("id_ejecucion", "ID de la ejecucion"),
     ("notas", "Notas"),
 ]
+
+# El otro informe: las ORDENES. Aca esta lo que pediste, se haya hecho o no.
+COLUMNAS_ORDENES = [
+    ("fecha_hora", "Fecha y hora (NY)"),
+    ("symbol", "Simbolo"),
+    ("lado", "Lado"),
+    ("estado", "Estado"),
+    ("cantidad", "Cantidad"),
+    ("cantidad_ejecutada", "Cantidad ejecutada"),
+    ("precio_limite", "Precio limite"),
+    ("precio_promedio", "Precio promedio"),
+    ("motivo_rechazo", "Motivo del rechazo"),
+    ("duracion", "Duracion"),
+    ("order_id", "ID de la orden"),
+    ("notas", "Notas"),
+]
+
+# Los estados que puede tener una orden, ya traducidos por el conector. El orden
+# es el que se ve en la pantalla, de lo mas frecuente a lo menos.
+ESTADOS = ["Ejecutada", "Ejecutada en parte", "Cancelada", "Rechazada",
+           "Reemplazada", "Vencida", "Viva"]
 
 
 def a_hora_ny(iso: str | None) -> str:
@@ -60,25 +82,42 @@ def a_hora_ny(iso: str | None) -> str:
     return t.astimezone(NY).strftime("%Y-%m-%d %H:%M:%S")
 
 
-def _celda(valor) -> str:
-    """None = el broker no informa el dato; celda VACIA, no un cero (un cero seria
-    mentira: 'no me dijo cuanta comision cobro' no es 'no cobro comision')."""
-    if valor is None:
-        return ""
-    if isinstance(valor, bool):
-        return "SI" if valor else "NO"
-    return str(valor)
+def _por_fecha(filas):
+    return sorted(filas, key=lambda f: str(f.get("fecha_hora") or ""))
 
 
 def guardar_operaciones(filas, ruta: str) -> str:
-    """Escribe las operaciones, de la mas vieja a la mas nueva. Devuelve la ruta."""
-    ordenadas = sorted(filas, key=lambda f: str(f.get("fecha_hora") or ""))
-    with open(ruta, "w", encoding="utf-8-sig", newline="") as f:
-        w = csv.writer(f, delimiter=";")
-        w.writerow([titulo for _, titulo in COLUMNAS])
-        for fila in ordenadas:
-            w.writerow([_celda(fila.get(clave)) for clave, _ in COLUMNAS])
-    return ruta
+    """Escribe las ejecuciones, de la mas vieja a la mas nueva. Devuelve la ruta."""
+    return _guardar_planilla(_por_fecha(filas), COLUMNAS, ruta)
+
+
+def guardar_ordenes(filas, ruta: str) -> str:
+    """Escribe las ordenes, de la mas vieja a la mas nueva. Devuelve la ruta."""
+    return _guardar_planilla(_por_fecha(filas), COLUMNAS_ORDENES, ruta)
+
+
+def filtrar_por_estado(filas, estados) -> list[dict]:
+    """Deja solo las ordenes con alguno de esos estados. Sin estados = todas.
+
+    Compara contra la lista pedida y no al reves: si el broker devuelve un estado
+    que no conociamos, no se cuela por accidente en un filtro."""
+    if not estados:
+        return list(filas)
+    pedidos = {str(e) for e in estados}
+    return [f for f in filas if str(f.get("estado")) in pedidos]
+
+
+def resumen_ordenes(filas) -> str:
+    """Una linea para el registro: cuantas de cada estado."""
+    if not filas:
+        return "no hay ordenes en esas fechas"
+    cuenta: dict[str, int] = {}
+    for f in filas:
+        clave = str(f.get("estado") or "?")
+        cuenta[clave] = cuenta.get(clave, 0) + 1
+    detalle = ", ".join(f"{n:,} {e.lower()}(s)"
+                        for e, n in sorted(cuenta.items(), key=lambda x: -x[1]))
+    return f"{len(filas):,} orden(es): {detalle}"
 
 
 def resumen(filas) -> str:

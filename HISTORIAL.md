@@ -188,6 +188,22 @@ Consecuencia real, acotada: **solo los filtros que CUENTAN eventos en una ventan
 - **Por eso `verificar_tastytrade.py` no puede usar el mismo símbolo para el ciclo de órdenes y para el corto**: como Tasty no admite una compra y una venta abiertas en el mismo símbolo, un corto trabado envenenaba la corrida siguiente. Y su limpieza final ya no puede tumbar la corrida: antes, un cancel fallido terminaba todo en rojo **con todas las pruebas en verde**.
 - **El catálogo de instrumentos del sandbox de Tasty es de mentira** (15/08/2026): lista **24.802** símbolos en 15,9 s y no marca **ninguno** — `is-closing-only` y `is-fraud-risk` vienen en `false` para los 24.802. Producción lista **13.194** en 7,5 s, con **394 bloqueadas**, 6.004 ilíquidas y 3.539 con marca de fraude. Por eso el botón de excluidas, estando en sandbox, pide el catálogo de **producción** (lectura del listado de instrumentos: no toca la cuenta ni manda órdenes) y lo avisa en el registro.
 
+### El historial de la cuenta por API (medido el 17/08/2026, 30 días)
+
+| | Alpaca | Tradier | Tastytrade |
+|---|---|---|---|
+| Ejecuciones | 3.008 en **6,9 s** (31 páginas de 100) | 3.526 en **1,6 s** (una llamada) | 252 en **0,6 s** |
+| Órdenes históricas | 45.373 en 19,6 s | **no las ofrece** (su endpoint solo guarda las del día) | 5.883 en 16,8 s |
+| Motivo del rechazo | no lo informa | — | **sí, escrito palabra por palabra** |
+| Comisiones y tasas | no las informa | comisión sí, tasas no | todo separado |
+| Hora de la ejecución | sí | **no: solo la fecha** | sí |
+| Abrió o cerró posición | no | no | **sí** |
+
+- **De las 45.373 órdenes de Alpaca, 31.251 son canceladas y 11.315 reemplazadas**: cada repricio del bot cuenta como una orden nueva. No es un error del reporte, es cómo Alpaca modela el replace.
+- **Los round trips se calculan acá, no se le piden al broker.** Solo Tradier los ofrece hechos (`gainloss`), y **su respuesta no cuadra**: reportó +487,97 sobre 3.001 posiciones cerradas cuando la cuenta, con todo cerrado, movió +2.386,91 de caja neta. Calcularlo nosotros por FIFO da el mismo criterio en los tres y sale de las ejecuciones que ya bajamos.
+- **Cómo se validó el FIFO**: sumando la plata que entró y salió de la cuenta, que es un cálculo independiente del apareo. Con todo cerrado los dos números tienen que dar igual, y dieron: Alpaca +1.570,58 / +1.570,58; Tradier +2.525,64 / +2.525,74; Tasty +289,13 / +289,14.
+- **Tradier no manda la hora**, así que dentro de un día el único orden es el de la API — que devuelve de lo más nuevo a lo más viejo, y hay que darlo vuelta. Sin eso el listado quedaba ascendente entre días y descendente dentro de cada día. La etiqueta Largo/Corto de Tradier es lo mejor que se puede hacer con ese dato; **la plata no depende del orden**.
+
 ### Qué símbolos bloquea cada broker (medido el 15/08/2026)
 
 | | Alpaca paper | Tastytrade producción | Tradier |

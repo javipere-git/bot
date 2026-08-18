@@ -1,5 +1,10 @@
 """
-Historial de operaciones de la cuenta, a un archivo que abre Excel.
+Reportes de la cuenta, a un archivo que abre Excel.
+
+Son tres, porque contestan tres preguntas distintas: EJECUCIONES (lo que de verdad
+se opero), ORDENES (lo que se pidio, se haya hecho o no) y TRADES CERRADOS
+(entrada + salida + resultado). Este archivo prueba los tres; las secciones 1 a 8
+son las ejecuciones, la 9 las ordenes y la 10 los trades.
 
 PARA QUE: las paginas de los brokers son inservibles para esto. En Alpaca no hay
 boton de descargar: hay que seleccionar la tabla a mano, pagina por pagina, o
@@ -284,6 +289,234 @@ else:
     check(fila is not None and fila.minimumSize().width() <= reserva,
           "la fila del registro entra sin ensanchar el panel",
           f"pide {fila.minimumSize().width() if fila else 0}, reservado {reserva}")
+
+print("\n=== 9. El reporte de ORDENES: lo que se pidio, se haya hecho o no ===")
+from tradingbot.core.historial import (                                # noqa: E402
+    COLUMNAS_ORDENES,
+    ESTADOS,
+    filtrar_por_estado,
+    guardar_ordenes,
+    resumen_ordenes,
+)
+
+alp3 = object.__new__(AlpacaBroker)
+alp3._get = lambda path, params=None, **k: ([] if (params or {}).get("after", "").startswith("2026-08-14") else [
+    {"id": "o1", "submitted_at": "2026-08-14T14:00:00Z", "symbol": "aaa", "side": "buy",
+     "qty": "20", "filled_qty": "20", "limit_price": "10.5", "filled_avg_price": "10.49",
+     "status": "filled", "time_in_force": "day"},
+    {"id": "o2", "submitted_at": "2026-08-14T14:01:00Z", "symbol": "bbb", "side": "sell",
+     "qty": "20", "filled_qty": "0", "limit_price": "99", "filled_avg_price": None,
+     "status": "canceled", "time_in_force": "day"},
+    {"id": "o3", "submitted_at": "2026-08-14T14:02:00Z", "symbol": "ccc", "side": "buy",
+     "qty": "20", "filled_qty": "0", "limit_price": "8", "filled_avg_price": None,
+     "status": "rejected", "time_in_force": "day"},
+    {"id": "o4", "submitted_at": "2026-08-14T14:03:00Z", "symbol": "ddd", "side": "buy",
+     "qty": "20", "filled_qty": "0", "limit_price": "8", "filled_avg_price": None,
+     "status": "replaced", "time_in_force": "day", "replaces": "o9"},
+])
+ords = alp3.ordenes_historicas("2026-08-01", "2026-08-17")
+por_est = {o["symbol"]: o["estado"] for o in ords}
+check(por_est == {"AAA": "Ejecutada", "BBB": "Cancelada", "CCC": "Rechazada",
+                  "DDD": "Reemplazada"},
+      "Alpaca: cada estado suyo sale con un nombre en castellano", f"{por_est}")
+check(all(e in ESTADOS for e in por_est.values()),
+      "y todos son estados que la pantalla sabe ofrecer en el filtro")
+o1 = [o for o in ords if o["symbol"] == "AAA"][0]
+check(o1["cantidad"] == 20 and o1["cantidad_ejecutada"] == 20
+      and o1["precio_limite"] == 10.5 and o1["precio_promedio"] == 10.49,
+      "trae lo pedido y lo ejecutado por separado, con los dos precios")
+o4 = [o for o in ords if o["symbol"] == "DDD"][0]
+check(o4["notas"] == "reemplaza a o9",
+      "y deja rastro de la cadena de repricios (por eso hay tantas)", f"{o4['notas']}")
+
+tas3 = object.__new__(TastytradeBroker)
+tas3._account = "5W"
+tas3._pedir = lambda *a, **k: {"data": {"items": [
+    {"id": 1, "status": "Rejected", "underlying-symbol": "FNGG", "size": 20,
+     "price": "256.14", "received-at": "2026-08-17T19:55:01Z", "time-in-force": "Day",
+     "reject-reason": "Your account does not have sufficient buying power",
+     "legs": [{"action": "Buy to Open", "fills": []}]},
+    {"id": 2, "status": "Filled", "underlying-symbol": "ELLO", "size": 3,
+     "price": "20.0", "received-at": "2026-08-17T19:56:00Z", "time-in-force": "Day",
+     "legs": [{"action": "Sell to Close", "fills": [
+         {"quantity": 1, "fill-price": "20.00"},
+         {"quantity": 2, "fill-price": "21.50"}]}]},
+]}, "pagination": {"total-pages": 1}}
+ords_t = {o["symbol"]: o for o in tas3.ordenes_historicas("2026-08-01", "2026-08-17")}
+check("sufficient buying power" in str(ords_t["FNGG"]["motivo_rechazo"]),
+      "Tasty es el unico que manda el MOTIVO del rechazo escrito")
+check(ords_t["ELLO"]["cantidad_ejecutada"] == 3,
+      "suma los pedazos de una orden llenada en varias veces",
+      f"{ords_t['ELLO']['cantidad_ejecutada']}")
+check(abs(ords_t["ELLO"]["precio_promedio"] - 21.0) < 1e-6,
+      "y el precio promedio va PONDERADO por cantidad, no a secas",
+      f"{ords_t['ELLO']['precio_promedio']} (a secas daria 20.75)")
+check(ords_t["FNGG"]["precio_promedio"] is None,
+      "una orden sin ejecutar no tiene precio promedio: celda vacia")
+
+check(len(filtrar_por_estado(ords, [])) == 4, "sin filtro estan todas")
+solo = filtrar_por_estado(ords, ["Rechazada", "Cancelada"])
+check({o["symbol"] for o in solo} == {"BBB", "CCC"},
+      "con filtro quedan solo las pedidas", f"{[o['symbol'] for o in solo]}")
+check(filtrar_por_estado(ords, ["Vencida"]) == [],
+      "y si no hay ninguna de ese estado, no devuelve nada (no todas)")
+r = resumen_ordenes(ords)
+check("4 orden" in r and "ejecutada" in r, "el resumen cuenta por estado", r)
+
+ruta_o = os.path.join(carpeta, "ords.csv")
+guardar_ordenes(ords, ruta_o)
+with open(ruta_o, encoding="utf-8-sig", newline="") as f:
+    filas_o = list(csv.reader(f, delimiter=";"))
+check(filas_o[0][0] == "Fecha y hora (NY)" and "Motivo del rechazo" in filas_o[0],
+      "el archivo tiene la columna del motivo", f"{len(filas_o[0])} columnas")
+colo = {t: i for i, (_, t) in enumerate(COLUMNAS_ORDENES)}
+fila_bbb = [f for f in filas_o[1:] if f[1] == "BBB"][0]
+check(fila_bbb[colo["Precio promedio"]] == "",
+      "y lo que no aplica queda vacio, no en 0")
+
+print("\n=== 10. Los TRADES cerrados (round trip) ===")
+from tradingbot.core import round_trips                                # noqa: E402
+
+
+def ejec(fecha, sym, lado, cant, precio, comision=None, tasas=None):
+    return {"fecha_hora": fecha, "symbol": sym, "lado": lado, "cantidad": cant,
+            "precio": precio, "comision": comision, "tasas": tasas}
+
+
+# FIFO: la primera que compraste es la primera que se cierra
+cerr, sueltas = round_trips.armar([
+    ejec("2026-08-10 10:00:00", "AAA", "Compra", 10, 50.0),
+    ejec("2026-08-10 10:01:00", "AAA", "Compra", 10, 60.0),
+    ejec("2026-08-10 10:02:00", "AAA", "Venta", 10, 70.0),
+])
+check(len(cerr) == 1 and cerr[0]["precio_entrada"] == 50.0,
+      "cierra contra la PRIMERA compra (FIFO), no contra la ultima",
+      f"entrada {cerr[0]['precio_entrada'] if cerr else '-'}")
+check(cerr[0]["resultado"] == 200.0, "resultado = (70-50) x 10", f"{cerr[0]['resultado']}")
+check(cerr[0]["resultado_pct"] == 40.0, "y el % sobre lo invertido", f"{cerr[0]['resultado_pct']}")
+check(len(sueltas) == 1 and sueltas[0]["cantidad"] == 10,
+      "lo que quedo abierto se informa aparte, no como resultado cero",
+      f"{sueltas}")
+
+# un corto: se gana cuando BAJA
+cerr, _ = round_trips.armar([
+    ejec("2026-08-10 10:00:00", "BBB", "Venta", 10, 100.0),
+    ejec("2026-08-10 10:05:00", "BBB", "Compra", 10, 90.0),
+])
+check(cerr[0]["lado"] == "Corto", "una venta sin posicion abre un CORTO", cerr[0]["lado"])
+check(cerr[0]["resultado"] == 100.0,
+      "y en el corto se gana cuando baja (vendio 100, recompro 90)",
+      f"{cerr[0]['resultado']}")
+check(cerr[0]["duracion"] == "5.0 min", "calcula cuanto duro", cerr[0]["duracion"])
+
+# una salida grande contra dos entradas -> dos trades
+cerr, sueltas = round_trips.armar([
+    ejec("2026-08-10 10:00:00", "CCC", "Compra", 10, 50.0),
+    ejec("2026-08-10 10:01:00", "CCC", "Compra", 5, 52.0),
+    ejec("2026-08-10 10:02:00", "CCC", "Venta", 15, 55.0),
+])
+check(len(cerr) == 2 and sorted(t["cantidad"] for t in cerr) == [5, 10],
+      "una venta que tapa dos compras genera DOS trades", f"{[t['cantidad'] for t in cerr]}")
+check(not sueltas, "y no queda nada abierto")
+
+# darse vuelta: vender mas de lo que se tenia deja un corto abierto
+cerr, sueltas = round_trips.armar([
+    ejec("2026-08-10 10:00:00", "DDD", "Compra", 10, 50.0),
+    ejec("2026-08-10 10:01:00", "DDD", "Venta", 25, 55.0),
+])
+check(len(cerr) == 1 and cerr[0]["cantidad"] == 10,
+      "cierra lo que habia", f"{[t['cantidad'] for t in cerr]}")
+check(len(sueltas) == 1 and sueltas[0]["lado"] == "Corto" and sueltas[0]["cantidad"] == 15,
+      "y el excedente queda como corto abierto, no se pierde", f"{sueltas}")
+
+# los costos: se reparten por accion, y si el broker no los informa NO se inventan
+cerr, _ = round_trips.armar([
+    ejec("2026-08-10 10:00:00", "EEE", "Compra", 10, 50.0, comision=-1.0, tasas=0.5),
+    ejec("2026-08-10 10:01:00", "EEE", "Venta", 10, 51.0, comision=-1.0, tasas=0.5),
+])
+check(cerr[0]["costos"] == -3.0, "suma comisiones y tasas de las dos puntas",
+      f"{cerr[0]['costos']}")
+check(cerr[0]["resultado_neto"] == 7.0, "y el neto descuenta esos costos",
+      f"bruto {cerr[0]['resultado']} -> neto {cerr[0]['resultado_neto']}")
+cerr, _ = round_trips.armar([
+    ejec("2026-08-10 10:00:00", "FFF", "Compra", 10, 50.0),
+    ejec("2026-08-10 10:01:00", "FFF", "Venta", 10, 51.0),
+])
+check(cerr[0]["costos"] is None and cerr[0]["resultado_neto"] is None,
+      "si el broker no informa costos (Alpaca), esas celdas van VACIAS")
+
+# dos simbolos no se mezclan entre si
+cerr, _ = round_trips.armar([
+    ejec("2026-08-10 10:00:00", "GGG", "Compra", 10, 50.0),
+    ejec("2026-08-10 10:01:00", "HHH", "Venta", 10, 80.0),
+    ejec("2026-08-10 10:02:00", "GGG", "Venta", 10, 51.0),
+    ejec("2026-08-10 10:03:00", "HHH", "Compra", 10, 79.0),
+])
+check({t["symbol"] for t in cerr} == {"GGG", "HHH"} and len(cerr) == 2,
+      "cada simbolo se aparea con el suyo", f"{[(t['symbol'], t['lado']) for t in cerr]}")
+
+# LA PRUEBA QUE MAS VALE: el total tiene que dar igual que la plata que entro y
+# salio de la cuenta. Es un calculo independiente del apareo, asi que si el FIFO
+# se equivoca en algo, los numeros no coinciden. (Contra las cuentas de verdad,
+# el 17/08/2026: Alpaca +1.570,58 y +1.570,58; Tradier +2.525,64 y +2.525,74;
+# Tasty +289,13 y +289,14.)
+movs = [
+    ejec("2026-08-10 10:00:00", "III", "Compra", 10, 50.0),
+    ejec("2026-08-10 10:01:00", "III", "Venta", 4, 52.0),
+    ejec("2026-08-10 10:02:00", "III", "Compra", 7, 49.0),
+    ejec("2026-08-10 10:03:00", "III", "Venta", 13, 53.0),
+    ejec("2026-08-10 10:04:00", "JJJ", "Venta", 8, 30.0),
+    ejec("2026-08-10 10:05:00", "JJJ", "Compra", 8, 28.5),
+]
+cerr, sueltas = round_trips.armar(movs)
+caja = sum((-1 if str(m["lado"]).startswith("Compra") else 1) * m["cantidad"] * m["precio"]
+           for m in movs)
+total = sum(t["resultado"] for t in cerr)
+check(not sueltas, "en este juego se cierra todo")
+check(abs(total - caja) < 0.01,
+      "el resultado del FIFO da lo MISMO que la plata que entro y salio",
+      f"FIFO {total:+.2f} vs caja {caja:+.2f}")
+
+r = round_trips.resumen(cerr, sueltas)
+check("trade(s) cerrado(s)" in r and "en ganancia" in r,
+      "el resumen dice cuantos y cuantos ganadores", r)
+check(round_trips.resumen([]) == "no se cerro ningun trade en esas fechas",
+      "y si no se cerro nada lo dice claro")
+
+ruta_t = os.path.join(carpeta, "trades.csv")
+from tradingbot.core.planilla import guardar as guardar_planilla        # noqa: E402
+guardar_planilla(cerr, round_trips.COLUMNAS, ruta_t)
+with open(ruta_t, encoding="utf-8-sig", newline="") as f:
+    filas_t = list(csv.reader(f, delimiter=";"))
+check(filas_t[0][0] == "Simbolo" and "Resultado" in filas_t[0] and "Duracion" in filas_t[0],
+      "el archivo de trades tiene sus propios titulos", f"{filas_t[0][:4]}")
+check(len(filas_t) == len(cerr) + 1, "una fila por trade cerrado")
+
+print("\n=== 11. El cuadro elige los tres reportes ===")
+from tradingbot.gui.operaciones_dialog import (                        # noqa: E402
+    EJECUCIONES,
+    ORDENES,
+    TRADES,
+)
+
+d2 = DialogoOperaciones()
+check(d2.tipo() == TRADES, "arranca en trades cerrados, que es el que dice como te fue")
+d2.rb_ord.setChecked(True)
+check(d2.tipo() == ORDENES and d2.g_estados.isEnabled(),
+      "al elegir ordenes se habilitan los estados")
+d2.rb_ejec.setChecked(True)
+check(d2.tipo() == EJECUCIONES and not d2.g_estados.isEnabled(),
+      "y en los otros dos reportes los estados no aplican, asi que se apagan")
+check(d2.estados() == [], "con todos tildados no filtra nada")
+d2.tildes["Cancelada"].setChecked(False)
+check(d2.estados() and "Cancelada" not in d2.estados(),
+      "y al destildar uno, ese queda afuera", f"{d2.estados()}")
+d2.rb_ord.setChecked(True)
+for c in d2.tildes.values():
+    c.setChecked(False)
+d2.accept()
+check(d2.result() != DialogoOperaciones.Accepted,
+      "sin ningun estado tildado no deja seguir (bajaria un archivo vacio)")
 
 print()
 if fallos:

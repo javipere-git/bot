@@ -123,6 +123,34 @@ def _fecha(valor) -> str:
     return texto
 
 
+# estado de Tasty -> el nombre que sale en el reporte de ordenes
+_ESTADO_INFORME = {
+    "Filled": "Ejecutada",
+    "Cancelled": "Cancelada",
+    "Canceled": "Cancelada",
+    "Rejected": "Rechazada",
+    "Expired": "Vencida",
+    "Removed": "Cancelada",
+    "Received": "Viva",
+    "Routed": "Viva",
+    "In Flight": "Viva",
+    "Live": "Viva",
+    "Cancel Requested": "Viva",
+    "Replace Requested": "Viva",
+    "Contingent": "Viva",
+}
+
+
+def _promedio_fills(llenados) -> float | None:
+    """Precio promedio PONDERADO por cantidad. Una orden se puede llenar en varios
+    pedazos a precios distintos; promediar los precios a secas daria mal."""
+    total = sum(_f(f.get("quantity")) for f in llenados)
+    if not total:
+        return None
+    plata = sum(_f(f.get("quantity")) * _f(f.get("fill-price")) for f in llenados)
+    return round(plata / total, 6)
+
+
 def _con_signo(item: dict, campo: str) -> float | None:
     """Tasty manda la plata SIN signo y aparte un 'efecto' que dice si entro o salio.
 
@@ -605,6 +633,50 @@ class TastytradeBroker(Broker):
                     "order_id": i.get("order-id"),
                     "id_ejecucion": i.get("exec-id") or i.get("id"),
                     "notas": i.get("destination-venue") or i.get("exchange"),
+                })
+            if pagina + 1 >= js.get("pagination", {}).get("total-pages", 1):
+                break
+        return filas
+
+    def ordenes_historicas(self, desde: str, hasta: str) -> list[dict]:
+        """Todas las ordenes del periodo, con su estado final.
+
+        Es el UNICO de los tres que manda el MOTIVO del rechazo escrito, palabra por
+        palabra ("Your account does not have sufficient buying power available for
+        this order..."). Eso es justo lo que haciamos a mano mirando los rechazos.
+
+        Medido el 17/08/2026: 5.883 ordenes en 30 dias. El maximo por pagina es 100
+        (con 250 contesta 400 'does not have a valid value'), asi que son 59 vueltas."""
+        from ..core.historial import a_hora_ny
+
+        filas = []
+        for pagina in range(0, 500):        # 500 x 100 = 50.000, tope de seguridad
+            js = self._pedir("GET", f"/accounts/{self._account}/orders",
+                             params={"start-date": desde, "end-date": hasta,
+                                     "per-page": 100, "page-offset": pagina},
+                             timeout=60)
+            items = js.get("data", {}).get("items", [])
+            if not items:
+                break
+            for o in items:
+                patas = o.get("legs") or [{}]
+                pata = patas[0]
+                llenados = [f for p in patas for f in (p.get("fills") or [])]
+                filas.append({
+                    "fecha_hora": a_hora_ny(o.get("received-at")),
+                    "symbol": str(o.get("underlying-symbol", "")).upper(),
+                    "lado": _LADO_TASTY.get(str(pata.get("action") or ""),
+                                            pata.get("action")),
+                    "cantidad": _f(o.get("size")),
+                    "cantidad_ejecutada": sum(_f(f.get("quantity")) for f in llenados),
+                    "precio_limite": _f(o.get("price")) or None,
+                    "precio_promedio": _promedio_fills(llenados),
+                    "estado": _ESTADO_INFORME.get(str(o.get("status") or ""),
+                                                  o.get("status")),
+                    "motivo_rechazo": o.get("reject-reason"),
+                    "duracion": o.get("time-in-force"),
+                    "order_id": o.get("id"),
+                    "notas": ("editada" if o.get("edited") else None),
                 })
             if pagina + 1 >= js.get("pagination", {}).get("total-pages", 1):
                 break

@@ -80,6 +80,35 @@ _SIDE_A_ALPACA = {
 # no se puede saber por el dato si una venta abrio un corto o cerro un largo
 _LADO_ALPACA = {"buy": "Compra", "sell": "Venta"}
 
+# estado de Alpaca -> el nombre que sale en el reporte de ordenes
+_ESTADO_INFORME = {
+    "filled": "Ejecutada",
+    "partially_filled": "Ejecutada en parte",
+    "canceled": "Cancelada",
+    "rejected": "Rechazada",
+    "replaced": "Reemplazada",
+    "expired": "Vencida",
+    "done_for_day": "Vencida",
+    "new": "Viva",
+    "accepted": "Viva",
+    "pending_new": "Viva",
+    "held": "Viva",
+    "accepted_for_bidding": "Viva",
+    "stopped": "Viva",
+    "suspended": "Viva",
+    "calculated": "Viva",
+    "pending_cancel": "Viva",
+    "pending_replace": "Viva",
+}
+
+
+def _num(valor):
+    """Alpaca manda los numeros como TEXTO, y vacios donde no hay dato."""
+    try:
+        return float(valor) if valor not in (None, "", "None") else None
+    except (TypeError, ValueError):
+        return None
+
 
 # ---------------------------------------------------------------------------
 # Hub de AVISOS DE CUENTA compartido: un solo trade stream + cache por cuenta.
@@ -349,6 +378,58 @@ class AlpacaBroker(Broker):
                 })
             token = lote[-1].get("id")
             if len(lote) < 100:
+                break
+        return filas
+
+    def ordenes_historicas(self, desde: str, hasta: str) -> list[dict]:
+        """Todas las ordenes del periodo, con su estado final.
+
+        Se pagina con 'after': Alpaca da como maximo 500 por pedido, asi que cada
+        vuelta arranca justo despues de la ultima que trajo. Se pide en orden
+        ascendente para que ese corte sea confiable.
+
+        OJO con 'replaced': cada vez que el bot repricia, Alpaca CANCELA la orden y
+        crea una nueva con otro id. Por eso hay tantas: son la misma intencion
+        contada varias veces. La columna de notas dice cual reemplazo a cual."""
+        from ..core.historial import a_hora_ny
+
+        filas: list[dict] = []
+        vistos: set[str] = set()
+        desde_iso = f"{desde}T00:00:00Z"
+        for _ in range(200):            # 200 x 500 = 100.000, tope de seguridad
+            lote = self._get("/v2/orders", params={
+                "status": "all", "after": desde_iso, "until": f"{hasta}T23:59:59Z",
+                "limit": 500, "direction": "asc",
+            })
+            if not isinstance(lote, list) or not lote:
+                break
+            nuevos = 0
+            for o in lote:
+                if o.get("id") in vistos:
+                    continue            # 'after' es inclusivo: la ultima se repite
+                vistos.add(o.get("id"))
+                nuevos += 1
+                filas.append({
+                    "fecha_hora": a_hora_ny(o.get("submitted_at") or o.get("created_at")),
+                    "symbol": str(o.get("symbol", "")).upper(),
+                    "lado": _LADO_ALPACA.get(str(o.get("side") or ""), o.get("side")),
+                    "cantidad": _num(o.get("qty")),
+                    "cantidad_ejecutada": _num(o.get("filled_qty")),
+                    "precio_limite": _num(o.get("limit_price")),
+                    "precio_promedio": _num(o.get("filled_avg_price")),
+                    "estado": _ESTADO_INFORME.get(str(o.get("status") or ""),
+                                                  o.get("status")),
+                    # Alpaca no manda el motivo del rechazo por la API
+                    "motivo_rechazo": None,
+                    "duracion": o.get("time_in_force"),
+                    "order_id": o.get("id"),
+                    "notas": (f"reemplaza a {o.get('replaces')}"
+                              if o.get("replaces") else None),
+                })
+            if nuevos == 0:
+                break
+            desde_iso = lote[-1].get("submitted_at") or lote[-1].get("created_at")
+            if len(lote) < 500:
                 break
         return filas
 

@@ -62,6 +62,10 @@ class BrokerHibrido(Broker):
         """El historial es de la CUENTA donde se opera."""
         return self._op.operaciones(desde, hasta)
 
+    def ordenes_historicas(self, desde: str, hasta: str) -> list[dict]:
+        """Idem: las ordenes son de la cuenta donde se opera."""
+        return self._op.ordenes_historicas(desde, hasta)
+
     def orden_de_aviso(self, evento):
         """El aviso de cuenta viene del broker donde se opera, asi que lo traduce el."""
         return self._op.orden_de_aviso(evento)

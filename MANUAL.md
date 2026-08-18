@@ -216,26 +216,56 @@ permite UNA sola conexion de streaming de datos a la vez (con Algo Trader Plus, 
   - **Iliquida (45%) y marca de fraude (27%) NO se usan para bloquear nada**: filtrar
     por ahi vaciaria cualquier watchlist. Son solo para mirar.
 
-### Historial de operaciones
-- **"Operaciones"** (17/08/2026), al lado del selector de reportes. Baja a un `.csv`
-  (se abre con Excel) **todas las ejecuciones de la cuenta** entre dos fechas.
-  - Son **EJECUCIONES, no ordenes**: lo que de verdad se opero. Una orden puede
-    llenarse en varios pedazos y a precios distintos; eso es lo que sirve para
-    revisar como te fue.
-  - Columnas: fecha y hora **de Nueva York**, simbolo, lado, cantidad, precio,
-    importe, comision, tasas, neto, ID de la orden, ID de la ejecucion y notas.
-    Lo que ese broker **no informa queda vacio**, no en cero.
-  - Sale del broker donde **OPERAS**, e incluye lo que hayas hecho a mano o desde
-    otra PC: es la cuenta entera, no solo lo que hizo el bot.
-  - El cuadro arranca con el **ultimo mes** y tiene atajos de 7 / 30 / 90 dias.
-  - Medido el 17/08/2026, 30 dias: **Alpaca 3.008** ejecuciones en 6,9 s (31 paginas
-    de 100), **Tradier 3.526** en 1,6 s (una sola llamada), **Tastytrade 252** en
-    0,6 s. Va en otro hilo: la app sigue andando.
-  - Que informa cada uno: Alpaca **no** manda comisiones ni tasas (su modelo es sin
-    comision). Tradier manda la comision y el importe con signo, pero **su historial
-    no trae la hora**, solo la fecha. Tastytrade es el mas completo: comision, tasas
-    separadas, neto, mercado donde se ejecuto, y **si la operacion abrio o cerro** la
-    posicion.
+### Reportes de la cuenta
+- **"Reportes"** (17/08/2026), al lado del selector de pasadas. Baja a un `.csv`
+  (se abre con Excel) lo que el broker tiene de la cuenta entre dos fechas. Salen
+  del broker donde **OPERAS** e incluyen lo que hayas hecho **a mano o desde otra
+  PC**: es la cuenta entera, no solo lo que hizo el bot. El cuadro arranca con el
+  **ultimo mes** y tiene atajos de hoy / 7 / 30 / 90 dias. Todo va en otro hilo:
+  la app sigue andando.
+
+  Son **tres** reportes, porque contestan tres preguntas distintas.
+
+- **Trades cerrados** *(el que dice como te fue)*. Aparea cada entrada con su
+  salida y calcula el resultado de cada operacion cerrada: simbolo, largo/corto,
+  cantidad, entrada y salida con sus precios, resultado en $ y en %, comisiones y
+  tasas, resultado neto y **cuanto duro**.
+  - Se calcula por **FIFO** (la primera que compraste es la primera que se cierra),
+    que es el criterio de los brokers. Sale de las ejecuciones, asi que **no cuesta
+    ninguna llamada de mas**.
+  - Lo que quedo **abierto** en el periodo se informa aparte, no como resultado
+    cero: comprar y no haber vendido todavia no es ni ganancia ni perdida.
+  - Verificado el 17/08/2026 contra un calculo independiente (la plata que entro y
+    salio de la cuenta), con todo cerrado: Alpaca +1.570,58 / +1.570,58;
+    Tradier +2.525,64 / +2.525,74; Tasty +289,13 / +289,14.
+  - **Con Tradier hay una salvedad**: su historial trae la fecha pero **no la hora**,
+    asi que dentro de un mismo dia el unico orden es el que manda la API. Si operaste
+    el mismo simbolo varias veces en el dia, la etiqueta **Largo/Corto puede salir
+    dada vuelta**. La plata no cambia: comprar a 10 y vender a 11 da lo mismo que
+    vender a 11 y recomprar a 10.
+
+- **Ejecuciones** *(lo que de verdad se opero)*. Fecha y hora **de Nueva York**,
+  simbolo, lado, cantidad, precio, importe, comision, tasas, neto, ID de orden, ID
+  de ejecucion y notas. Una orden puede llenarse en varios pedazos y a precios
+  distintos: aca estan todos.
+  - Medido el 17/08/2026, 30 dias: **Alpaca 3.008** en 6,9 s (31 paginas de 100),
+    **Tradier 3.526** en 1,6 s (una sola llamada), **Tastytrade 252** en 0,6 s.
+
+- **Ordenes** *(lo que se pidio, se haya hecho o no)*. Trae el estado final de cada
+  una y se puede **filtrar**: Ejecutada, Ejecutada en parte, Cancelada, Rechazada,
+  Reemplazada, Vencida, Viva. Columnas: cantidad pedida y ejecutada por separado,
+  precio limite y precio promedio, **motivo del rechazo**, duracion y notas.
+  - Medido el 17/08/2026, 30 dias: **Alpaca 45.373** ordenes en 19,6 s (31.251
+    canceladas + 11.315 reemplazadas: cada repricio del bot cuenta como una orden
+    nueva), **Tastytrade 5.883** en 16,8 s.
+  - **Tradier no lo ofrece**: su endpoint de ordenes solo guarda las del DIA.
+  - **El motivo del rechazo solo lo manda Tastytrade**, escrito palabra por palabra
+    ("Your account does not have sufficient buying power available for this
+    order..."). Alpaca no lo informa por API: esa columna queda vacia.
+
+- Lo que un broker **no informa queda vacio**, nunca en cero. Alpaca no manda
+  comisiones ni tasas (su modelo es sin comision), asi que en sus trades el
+  resultado neto tambien va vacio: el bruto es el unico dato real que hay.
 
 ### Entrada
 - **Cantidad**: acciones por orden.

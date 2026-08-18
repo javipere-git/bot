@@ -230,6 +230,11 @@ class TradierBroker(Broker):
         eventos = nodo.get("event") or []
         if isinstance(eventos, dict):       # un solo evento viene sin lista
             eventos = [eventos]
+        # Tradier manda de lo MAS NUEVO a lo mas viejo. Se da vuelta para que salga
+        # en orden cronologico. Importa de verdad: como su historial no trae la hora
+        # (solo la fecha), este es el unico orden que tenemos DENTRO de cada dia, y
+        # es el que decide cual operacion fue la entrada y cual la salida.
+        eventos = list(reversed(eventos))
         filas = []
         for e in eventos:
             t = e.get("trade") or {}

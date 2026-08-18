@@ -10,7 +10,7 @@ columnas de una, sin el asistente de importacion.
 """
 from __future__ import annotations
 
-import csv
+from .planilla import guardar as _guardar_planilla
 
 # (clave interna, encabezado que se ve en Excel)
 COLUMNAS = [
@@ -26,22 +26,9 @@ COLUMNAS = [
 ]
 
 
-def _celda(valor) -> str:
-    """None = este broker no informa el dato, y se deja la celda VACIA a proposito:
-    un 'NO' ahi seria mentira (Alpaca no dice si una accion es iliquida, no dice
-    que no lo sea)."""
-    if valor is None:
-        return ""
-    if isinstance(valor, bool):
-        return "SI" if valor else "NO"
-    return str(valor)
-
-
 def guardar_catalogo(filas, ruta: str) -> str:
-    """Escribe las filas del catalogo. Devuelve la ruta."""
-    with open(ruta, "w", encoding="utf-8-sig", newline="") as f:
-        w = csv.writer(f, delimiter=";")
-        w.writerow([titulo for _, titulo in COLUMNAS])
-        for fila in filas:
-            w.writerow([_celda(fila.get(clave)) for clave, _ in COLUMNAS])
-    return ruta
+    """Escribe las filas del catalogo. Devuelve la ruta.
+
+    Lo que este broker no informa queda en blanco a proposito: un 'NO' ahi seria
+    mentira (Alpaca no dice que una accion NO sea iliquida; no dice nada)."""
+    return _guardar_planilla(filas, COLUMNAS, ruta)

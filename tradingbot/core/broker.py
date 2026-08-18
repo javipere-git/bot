@@ -94,6 +94,28 @@ class Broker(ABC):
         Lista vacia = este broker no lo tiene."""
         return []
 
+    def ordenes_historicas(self, desde: str, hasta: str) -> list[dict]:
+        """Todas las ORDENES entre dos fechas (YYYY-MM-DD), con su estado final.
+
+        Distinto de operaciones(): aca esta lo que PEDISTE, se haya hecho o no.
+        Sirve para ver que se cancelo, que se rechazo y por que.
+
+        Cada fila trae las mismas claves en todos los brokers, con None donde ese
+        broker no informa el dato:
+            fecha_hora (hora de NY), symbol, lado, cantidad, cantidad_ejecutada,
+            precio_limite, precio_promedio, estado, motivo_rechazo, duracion,
+            order_id, notas
+
+        'estado' es siempre uno de: Ejecutada, Cancelada, Rechazada, Reemplazada,
+        Vencida, Viva. Cada broker los nombra distinto y el conector traduce.
+
+        Medido el 17/08/2026 sobre 30 dias: Alpaca 500 por pagina, Tastytrade 5.883
+        (100 por pagina, con el MOTIVO del rechazo escrito). TRADIER NO LO OFRECE:
+        su endpoint de ordenes solo guarda las del DIA.
+
+        Lista vacia = este broker no lo tiene."""
+        return []
+
     def orden_de_aviso(self, evento) -> tuple[str | None, "OrderStatus | None", Order | None]:
         """Traduce un aviso del canal de cuenta a datos de una orden.
 
