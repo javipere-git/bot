@@ -205,16 +205,24 @@ permite UNA sola conexion de streaming de datos a la vez (con Algo Trader Plus, 
     lo movés de cuadro y listo.
   - Si ya tenias un archivo del formato viejo (una sola lista sin nombre), se lee
     igual: lo que tenias cargado cae en el primer cuadro y no se pierde nada.
-  - **Son dos archivos, y conviene saber por que** (aprendido el 18/08/2026, cuando
-    la actualizacion se trabo en una PC):
-    - `config/excluidas.txt` — **las tuyas**. SI va al repositorio: son tus
-      criterios, no dependen del broker, y te siguen a las tres PCs.
-    - `config/excluidas_broker.txt` — **la del broker**. NO va al repositorio: es
-      **distinta en cada broker** (Alpaca bloquea 863, Tastytrade 394, y no son los
-      mismos) y la rehace el boton "Traer del broker". Cada PC tiene la suya.
-  - Si estuvieran juntas, mandarle a la PC de Tasty la lista de Alpaca no solo no
-    serviria: **excluiria simbolos que Tasty si opera**. Y como la app la reescribe
-    en cada refresco, chocaria con el repositorio en cada actualizacion.
+  - **Son tres archivos, y conviene saber por que** (aprendido el 18/08/2026, cuando
+    la actualizacion se trabo dos veces en la PC de Tasty):
+    - `config/excluidas.txt` — **las tuyas, en esta PC**. La escribe la app.
+    - `config/excluidas_broker.txt` — **la del broker, en esta PC**. La escribe la
+      app con el boton "Traer del broker".
+    - `config/excluidas_compartidas.txt` — **el punto de partida**. Es el UNICO que
+      va al repositorio, y la app **nunca** lo escribe. Cuando una PC todavia no
+      tiene su lista, arranca con esta: asi no hay que cargar todo de nuevo en cada
+      maquina.
+  - **La regla que costo dos actualizaciones trabadas**: un archivo que la app
+    reescribe sola no puede vivir en el repositorio. Choca en cada actualizacion y
+    te deja sin poder actualizar, que es peor que el problema que resolvia.
+  - La del broker, ademas, **no podria viajar aunque quisieramos**: es distinta en
+    cada broker (Alpaca bloquea 863, Tastytrade 394, y no son los mismos).
+    Mandarle a la PC de Tasty la lista de Alpaca **le excluiria simbolos que Tasty
+    si opera**.
+  - Si querés que tu lista de hoy pase a ser la compartida para las tres PCs,
+    pedimelo y la copio: es a mano justamente para que no pueda chocar.
   - Medido el 15/08/2026: **Alpaca 863** bloqueadas de 14.234 (`tradable=false`),
     **Tastytrade 394** de 13.194 (`is-closing-only`: solo dejan CERRAR). Tradier no
     ofrece esta lista.

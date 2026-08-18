@@ -15,18 +15,26 @@ Si estuvieran todas juntas, cada vez que quisieras actualizar la del broker
 tendrias que volver a cargar las tuyas, y no sabrias cual sacar cuando cambia el
 motivo. Separadas, cada una se renueva sin tocar las otras.
 
-SON DOS ARCHIVOS, y esto tambien tiene su porque (aprendido a los golpes el
-18/08/2026, cuando la actualizacion se trabo en la PC de Tasty):
+SON TRES ARCHIVOS, y esto tiene su porque (aprendido a los golpes el 18/08/2026,
+cuando la actualizacion se trabo DOS VECES en la PC de Tasty):
 
-  config/excluidas.txt         LAS TUYAS. Va al repo y te sigue a las tres PCs.
-                               Son tus criterios: no dependen del broker.
-  config/excluidas_broker.txt  LA DEL BROKER. NO va al repo, es de cada PC.
+  config/excluidas.txt              LAS TUYAS, en esta PC. La escribe la app.
+  config/excluidas_broker.txt       LA DEL BROKER, en esta PC. La escribe la app.
+  config/excluidas_compartidas.txt  El PUNTO DE PARTIDA. Es el unico que va al
+                                    repositorio, y la app NUNCA lo escribe.
 
-La del broker no puede viajar: es DISTINTA en cada broker. Medido el 15/08/2026,
-Alpaca bloquea 863 simbolos y Tastytrade 394, y no son los mismos. Mandarle a la
-PC de Tasty la lista de Alpaca no solo no sirve: excluye simbolos que Tasty si
-opera. Ademas la reescribe cada vez que apretas "Traer del broker", asi que si
-viajara chocaria con el repo en cada actualizacion (fue exactamente lo que paso).
+LA REGLA, que costo dos actualizaciones trabadas: **un archivo que la app
+reescribe sola no puede vivir en el repositorio**. Choca en cada actualizacion y
+te deja sin poder actualizar, que es mucho peor que el problema que resolvia.
+
+Por eso los dos que escribe la app estan en .gitignore, y lo que viaja es una
+copia aparte que solo se toca a mano. Cuando una PC todavia no tiene su lista,
+arranca con esa: asi no hay que volver a cargar todo en cada maquina.
+
+La lista del broker, ademas, NO PODRIA viajar aunque quisieramos: es DISTINTA en
+cada broker. Medido el 15/08/2026, Alpaca bloquea 863 simbolos y Tastytrade 394,
+y no son los mismos. Mandarle a la PC de Tasty la lista de Alpaca no solo no
+sirve: le excluiria simbolos que Tasty si opera.
 """
 from __future__ import annotations
 
@@ -46,11 +54,21 @@ _RAIZ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 RUTA = os.path.join(_RAIZ, "config", "excluidas.txt")
 
 
+def _vecino(ruta: str | None, sufijo: str) -> str:
+    """Un archivo hermano del de las tuyas, con un sufijo en el nombre."""
+    raiz, ext = os.path.splitext(ruta or RUTA)
+    return f"{raiz}_{sufijo}{ext or '.txt'}"
+
+
 def _ruta_broker(ruta: str | None) -> str:
-    """El archivo de la lista del broker, al lado del de las tuyas."""
-    base = ruta or RUTA
-    raiz, ext = os.path.splitext(base)
-    return f"{raiz}_broker{ext or '.txt'}"
+    """La lista del broker EN ESTA PC. La escribe la app; no va al repositorio."""
+    return _vecino(ruta, "broker")
+
+
+def _ruta_compartida(ruta: str | None) -> str:
+    """El punto de partida que SI viaja con el repositorio. La app nunca lo escribe:
+    solo lo lee cuando esta PC todavia no tiene su propia lista."""
+    return _vecino(ruta, "compartidas")
 
 
 def _limpiar(texto: str) -> list[str]:
@@ -81,22 +99,33 @@ def leer(ruta: str | None = None) -> tuple[list[tuple[str, list[str]]], list[str
 
     `mias` es una lista de (nombre, simbolos), siempre de CUANTAS_MIAS elementos:
     la pantalla tiene esa cantidad de cuadros fijos, asi que se completa con las
-    que falten. Si el archivo no existe, todas vacias."""
+    que falten.
+
+    Si esta PC todavia no tiene su lista, se arranca con la COMPARTIDA (la que
+    viaja con el repositorio). Es solo el punto de partida: apenas guardes, esta
+    PC pasa a tener la suya y la compartida no se toca nunca mas."""
     vacias = [(n, []) for n in NOMBRES_POR_DEFECTO]
+    es_local = True
     try:
         with open(ruta or RUTA, encoding="utf-8") as f:
             texto = f.read()
     except OSError:
-        texto = ""
+        es_local = False
+        try:
+            with open(_ruta_compartida(ruta), encoding="utf-8") as f:
+                texto = f.read()
+        except OSError:
+            texto = ""
 
     arriba, _, abajo = texto.partition(_SEP_BROKER)
     try:
         with open(_ruta_broker(ruta), encoding="utf-8") as f:
             del_broker = _limpiar(f.read())
     except OSError:
-        # Todavia no existe el archivo aparte: se toma la seccion que quedo dentro
-        # del archivo viejo, asi la primera actualizacion no te borra la lista.
-        del_broker = _limpiar(abajo)
+        # Del archivo LOCAL con formato viejo se rescata la seccion del broker, asi
+        # la actualizacion no te borra lo que ya tenias. De la COMPARTIDA no: esa
+        # puede venir de una PC con otro broker, y sus bloqueadas no son las tuyas.
+        del_broker = _limpiar(abajo) if es_local else []
     if not texto:
         return (vacias, del_broker)
 

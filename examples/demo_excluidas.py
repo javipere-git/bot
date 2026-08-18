@@ -144,6 +144,42 @@ check("BLOQ1" not in open(ruta_mig, encoding="utf-8").read(),
 mias, broker = excluidas.leer(ruta_mig)
 check(broker == ["BLOQ1", "BLOQ2"], "sin perder nada", f"{broker}")
 
+print("\n=== 2b4. La PC nueva arranca con la lista COMPARTIDA ===")
+# La compartida es la unica que viaja con el repositorio, y la app NUNCA la
+# escribe. Esa es la regla que costo dos actualizaciones trabadas el 18/08/2026:
+# un archivo que la app reescribe sola no puede vivir en el repositorio.
+ruta_pc = os.path.join(carpeta, "pcnueva.txt")
+with open(excluidas._ruta_compartida(ruta_pc), "w", encoding="utf-8") as f:
+    f.write("# === MIAS: Impuestos ===\nMMLP\nGLP\n\n"
+            "# === MIAS: Sin liquidez ===\nRARA\n")
+mias, broker = excluidas.leer(ruta_pc)
+check(dict(mias)["Impuestos"] == ["MMLP", "GLP"] and dict(mias)["Sin liquidez"] == ["RARA"],
+      "sin lista propia, arranca con la compartida", f"{mias[:2]}")
+
+# apenas guarda, esta PC pasa a tener la suya y la compartida NO se toca
+antes_comp = open(excluidas._ruta_compartida(ruta_pc), encoding="utf-8").read()
+excluidas.guardar([("Impuestos", ["MMLP", "GLP", "NUEVO"])], ["BLOQ"], ruta_pc)
+check(open(excluidas._ruta_compartida(ruta_pc), encoding="utf-8").read() == antes_comp,
+      "guardar NO toca la compartida (por eso ya no puede chocar con el repo)")
+check(os.path.exists(ruta_pc), "y esta PC pasa a tener la suya")
+mias, _ = excluidas.leer(ruta_pc)
+check(dict(mias)["Impuestos"] == ["MMLP", "GLP", "NUEVO"],
+      "que a partir de ahi es la que manda", f"{dict(mias)['Impuestos']}")
+
+print("\n=== 2b5. La compartida NUNCA trae bloqueadas de otro broker ===")
+# Si la compartida viniera de una PC con otro broker, sus bloqueadas no sirven:
+# Alpaca bloquea 863 y Tasty 394, y no son los mismos. Colarlas excluiria
+# simbolos que este broker SI opera.
+ruta_otro = os.path.join(carpeta, "otrobroker.txt")
+with open(excluidas._ruta_compartida(ruta_otro), "w", encoding="utf-8") as f:
+    f.write("# === MIAS: Impuestos ===\nMMLP\n\n"
+            "# === DEL BROKER (bloqueadas para abrir) ===\nDE_ALPACA_1\nDE_ALPACA_2\n")
+mias, broker = excluidas.leer(ruta_otro)
+check(dict(mias)["Impuestos"] == ["MMLP"], "las tuyas si vienen de la compartida")
+check(broker == [], "pero las del broker NO", f"{broker}")
+check("DE_ALPACA_1" not in excluidas.todas(ruta_otro),
+      "y por lo tanto el bot no las saltea")
+
 print("\n=== 2c. Un archivo del formato viejo se sigue leyendo ===")
 ruta_vieja = os.path.join(carpeta, "vieja.txt")
 with open(ruta_vieja, "w", encoding="utf-8") as f:

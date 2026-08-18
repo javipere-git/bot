@@ -27,23 +27,21 @@ echo  1) Trayendo los ultimos cambios...
 git pull
 if not errorlevel 1 goto :actualizado
 
-REM --- Segundo intento, solo por las excluidas ---------------------------------
-REM  Tus excluidas las escribe la app en esta PC, asi que pueden chocar con las
-REM  que vienen del repositorio y frenar la actualizacion (paso el 18/08/2026).
-REM  Antes de darse por vencido: se guarda una COPIA de las tuyas, se toma la
-REM  version del repositorio y se reintenta. No se pierde nada; la copia queda
-REM  en config\excluidas_respaldo.txt y la lista del broker ni se toca.
-if not exist "config\excluidas.txt" goto :fallo
+REM --- Segundo intento, solo por la lista compartida ---------------------------
+REM  Las excluidas que ESCRIBE LA APP (excluidas.txt y excluidas_broker.txt) no
+REM  van al repositorio, asi que ya no pueden trabar nada. La unica que viaja es
+REM  excluidas_compartidas.txt, que solo se toca a mano. Si alguien la edito en
+REM  esta PC y tambien cambio en el repositorio, se guarda una COPIA, se toma la
+REM  del repositorio y se reintenta. Tu lista de esta PC ni se toca.
+if not exist "config\excluidas_compartidas.txt" goto :fallo
 echo.
-echo     Aviso: tus excluidas de esta PC chocan con las del repositorio.
+echo     Aviso: la lista compartida de esta PC choca con la del repositorio.
 echo     Guardo una copia en config\excluidas_respaldo.txt y reintento.
-copy /Y "config\excluidas.txt" "config\excluidas_respaldo.txt" >NUL
-del /Q "config\excluidas.txt" >NUL 2>&1
-git checkout -- config/excluidas.txt >NUL 2>&1
+copy /Y "config\excluidas_compartidas.txt" "config\excluidas_respaldo.txt" >NUL
+git checkout -- config/excluidas_compartidas.txt >NUL 2>&1
 git pull
 if not errorlevel 1 (
-    echo     Listo. Revisa config\excluidas_respaldo.txt por si tenias simbolos
-    echo     que no esten en la lista que bajo del repositorio.
+    echo     Listo. Tus excluidas de esta PC quedaron intactas.
     goto :actualizado
 )
 
