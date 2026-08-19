@@ -168,6 +168,23 @@ permite UNA sola conexion de streaming de datos a la vez (con Algo Trader Plus, 
 ### Watchlist
 - Se carga escribiendo simbolos (separados por espacio, coma, `;` o salto de linea)
   o con el boton **"Cargar archivo..."** (.txt/.csv).
+- **Botones "WL 1 / WL 2 / WL 3" y la ruedita** (18/08/2026), a la derecha del campo.
+  Guardan hasta tres watchlists con nombre y las cargan de un click.
+  - **El campo sigue siendo el que manda.** Los botones solo lo llenan: el bot lee
+    lo que hay en el campo, igual que siempre. Podes seguir escribiendo a mano,
+    cargar un archivo o pegar, y eso pisa lo que haya cargado el boton.
+  - Apretar un WL **reemplaza** lo que haya en la watchlist. Una WL **vacia queda
+    deshabilitada**, asi no se te borra la lista de un click sin querer.
+  - En la pantalla los botones dicen "WL 1", "WL 2"... por una cuestion de lugar.
+    **El nombre que le pusiste aparece en la ayuda** al pasar el mouse (con cuantos
+    simbolos tiene y una muestra), y en el registro cuando la cargas.
+  - La **ruedita** abre el cuadro para precargarlas y ponerles nombre. Adentro, cada
+    fila tiene **"Tomar la de la pantalla"**: copia los simbolos que tenes cargados
+    AHORA, sin copiar y pegar. Es lo que hace practico guardar la lista que trajo
+    el boton de ETB (miles de simbolos).
+  - Igual que las excluidas, son **dos archivos**: `config/watchlists.txt` (las de
+    esta PC, las escribe la app, NO va al repositorio) y
+    `config/watchlists_compartidas.txt` (el punto de partida, el unico que viaja).
 - **"Cargar lista ETB" / "Descargar lista ETB"** (04/08/2026). ETB = *Easy To Borrow*:
   las acciones que se pueden **vender en corto**.
   - La lista se le pide **al broker donde OPERAS**, no al que da los precios. Con el

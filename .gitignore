@@ -40,3 +40,7 @@ operaciones_*.csv
 ordenes_*.csv
 trades_*.csv
 etb_*.txt
+
+# Watchlists guardadas de esta PC: las escribe la app, misma regla que arriba.
+# La que viaja es config/watchlists_compartidas.txt, que solo se toca a mano.
+config/watchlists.txt

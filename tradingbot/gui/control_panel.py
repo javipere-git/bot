@@ -41,7 +41,7 @@ from ..core.config import (
     OffsetUnit,
     OrderConfig,
 )
-from ..core import excluidas
+from ..core import excluidas, watchlists
 from ..core.models import Side
 from ..core.watchlist import parse_watchlist
 from .estado_ui import guardar_tilde, leer_tilde, poner_titulo
@@ -60,12 +60,15 @@ def _spin(minimum, maximum, value, decimals=2, step=0.01, suffix=""):
 
 
 class ControlPanel(QWidget):
-    def __init__(self, parent=None) -> None:
+    def __init__(self, parent=None, ruta_watchlists: str | None = None) -> None:
         super().__init__(parent)
         self.exit_rows: list[dict] = []
         # lo completa la ventana principal (es la unica que tiene el broker):
         # recibe el dialogo de excluidas y le carga las bloqueadas cuando lleguen
         self.traer_bloqueadas = None
+        # None = el archivo de siempre (config/watchlists.txt). Los tests le pasan
+        # uno temporal para no pisar el tuyo.
+        self._ruta_wl = ruta_watchlists
 
         root = QVBoxLayout(self)
         root.setContentsMargins(6, 6, 6, 6)
@@ -148,8 +151,34 @@ class ControlPanel(QWidget):
         self.txt_watchlist.setPlaceholderText(
             "Simbolos separados por espacio, coma, ; o salto de linea"
         )
-        self.txt_watchlist.setMaximumHeight(80)
-        lay.addWidget(self.txt_watchlist)
+        self.txt_watchlist.setMaximumHeight(102)
+
+        # A la derecha del campo, los accesos a las watchlists guardadas. El campo
+        # sigue siendo el que manda: estos botones SOLO lo llenan, asi que todo lo
+        # de siempre (escribir a mano, cargar un archivo, pegar) funciona igual.
+        con_wl = QHBoxLayout()
+        con_wl.addWidget(self.txt_watchlist, 1)
+        columna = QVBoxLayout()
+        columna.setSpacing(2)
+        self.btn_wl = []
+        for i in range(watchlists.CUANTAS):
+            b = QPushButton(f"WL {i + 1}")
+            b.setFixedHeight(24)
+            b.clicked.connect(lambda _=False, n=i: self._cargar_wl(n))
+            columna.addWidget(b)
+            self.btn_wl.append(b)
+        self.btn_wl_config = QPushButton("⚙")      # ruedita
+        self.btn_wl_config.setFixedHeight(24)
+        self.btn_wl_config.setToolTip(
+            "Precargar las watchlists de los botones WL y ponerles nombre.\n\n"
+            "Adentro hay un boton para guardar de una la lista que tengas AHORA\n"
+            "en la pantalla (por ejemplo, la que trajo el boton de ETB)."
+        )
+        self.btn_wl_config.clicked.connect(self._editar_wl)
+        columna.addWidget(self.btn_wl_config)
+        con_wl.addLayout(columna)
+        lay.addLayout(con_wl)
+        self._refrescar_wl()
         # Cargar archivo (mitad del ancho) + Limpiar y Pegar (un cuarto cada uno)
         fila_botones = QHBoxLayout()
         self.btn_cargar = QPushButton("Cargar archivo...")
@@ -205,6 +234,51 @@ class ControlPanel(QWidget):
         etb.addWidget(self.btn_catalogo)
         lay.addLayout(etb)
         return g
+
+    # ---------- watchlists guardadas ----------
+    def _refrescar_wl(self) -> None:
+        """Pone en cada boton su ayuda: el nombre y cuantos simbolos tiene.
+
+        En la pantalla el boton dice 'WL 1' por una cuestion de lugar; el nombre
+        que le pusiste aparece al pasarle el mouse por encima."""
+        for i, (nombre, simbolos) in enumerate(watchlists.leer(self._ruta_wl)):
+            if i >= len(self.btn_wl):
+                break
+            b = self.btn_wl[i]
+            b.setEnabled(bool(simbolos))
+            if simbolos:
+                b.setToolTip(f"{nombre}\n\n{len(simbolos):,} simbolo(s). "
+                             f"Al apretar, reemplaza lo que haya en la watchlist.\n"
+                             f"{' '.join(simbolos[:12])}"
+                             f"{'...' if len(simbolos) > 12 else ''}")
+            else:
+                b.setToolTip(f"{nombre}: vacia.\n"
+                             f"Cargala con el boton de la ruedita.")
+
+    def _cargar_wl(self, i: int) -> None:
+        listas = watchlists.leer(self._ruta_wl)
+        if i >= len(listas):
+            return
+        nombre, simbolos = listas[i]
+        if not simbolos:
+            self.append_log(f"WL {i + 1} ({nombre}) esta vacia. "
+                            f"Cargala con el boton de la ruedita.")
+            return
+        self.txt_watchlist.setPlainText(" ".join(simbolos))
+        self.append_log(f"Watchlist cargada desde WL {i + 1} ({nombre}): "
+                        f"{len(simbolos):,} simbolo(s).")
+
+    def _editar_wl(self) -> None:
+        from .watchlists_dialog import DialogoWatchlists
+        dlg = DialogoWatchlists(self, ruta=self._ruta_wl,
+                                en_pantalla=self.txt_watchlist.toPlainText())
+        if dlg.exec():
+            listas = dlg.listas()
+            ruta = watchlists.guardar(listas, self._ruta_wl)
+            self._refrescar_wl()
+            detalle = ", ".join(f"WL {i + 1} ({n}): {len(s)}"
+                                for i, (n, s) in enumerate(listas) if s) or "todas vacias"
+            self.append_log(f"Watchlists guardadas: {detalle}. En {ruta}")
 
     def _editar_excluidas(self) -> None:
         from .excluidas_dialog import DialogoExcluidas
