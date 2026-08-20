@@ -204,6 +204,16 @@ Consecuencia real, acotada: **solo los filtros que CUENTAN eventos en una ventan
 - **Cómo se validó el FIFO**: sumando la plata que entró y salió de la cuenta, que es un cálculo independiente del apareo. Con todo cerrado los dos números tienen que dar igual, y dieron: Alpaca +1.570,58 / +1.570,58; Tradier +2.525,64 / +2.525,74; Tasty +289,13 / +289,14.
 - **Tradier no manda la hora**, así que dentro de un día el único orden es el de la API — que devuelve de lo más nuevo a lo más viejo, y hay que darlo vuelta. Sin eso el listado quedaba ascendente entre días y descendente dentro de cada día. La etiqueta Largo/Corto de Tradier es lo mejor que se puede hacer con ese dato; **la plata no depende del orden**.
 
+### A dónde va cada orden (medido el 17 y el 20/08/2026)
+
+**Solo Tastytrade lo informa**, y manda dos campos que son cosas distintas: `destination-venue` (a quién le dio la orden) y `exchange` (dónde imprimió). Alpaca y Tradier no informan ninguno de los dos; ese dato solo existe en las confirmaciones mensuales (reporte 606), fuera de la API.
+
+- **Tasty le da el 100% del flujo a un mayorista**: de 346 operaciones, 346 fueron a Citadel, Hudson River, Susquehanna, Virtu o Jane Street. **Ninguna directo a una bolsa.** La decisión de internalizar o no **no es de Tasty, es del mayorista**.
+- De esas 346: **286 se las quedó el mayorista (83%)** y **58 salieron a una bolsa (17%)**, más 2 a un ATS. Por eso una fila "Citadel → Nasdaq" es normal: se la dieron a Citadel y Citadel la mandó a Nasdaq.
+- **Qué influye**: el precio. Bajo $20 sale al mercado el 24% de las veces; arriba de $100, solo el 6%. **Qué no influye**: la velocidad — mediana de 0,05 s en los dos casos, el mayorista decide en milisegundos.
+- **En la cinta, lo internalizado es la letra D** (FINRA ADF). Medido en vivo el 20/08 con el feed **consolidado de Tradier**: 446 prints, **46% D**. Con el feed de **Tastytrade**: 1.782 prints, **100% Q (Nasdaq)** — su streaming es solo Nasdaq, así que **ahí no se ve ni un print internalizado**, que es casi la mitad del mercado.
+- De las órdenes que **quedaron descansando** y se cancelaron (la enorme mayoría: 5.883 órdenes contra 346 ejecuciones) **no hay ningún dato de dónde se estaban mostrando**, en ningún broker.
+
 ### Qué símbolos bloquea cada broker (medido el 15/08/2026)
 
 | | Alpaca paper | Tastytrade producción | Tradier |

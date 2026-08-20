@@ -290,6 +290,63 @@ else:
           "la fila del registro entra sin ensanchar el panel",
           f"pide {fila.minimumSize().width() if fila else 0}, reservado {reserva}")
 
+print("\n=== 8c. A DONDE fue la orden: dos cosas distintas ===")
+# A QUIEN se la dieron y DONDE imprimio no son lo mismo, y confundirlas es el
+# error facil. Medido el 17/08/2026: Tasty se la dio SIEMPRE a un mayorista
+# (346 de 346), y recien el mayorista decide si se la queda (83%) o la manda a
+# una bolsa (17%). Por eso "Citadel -> Nasdaq" es una fila perfectamente normal.
+from tradingbot.core.venues import describir, mayorista                # noqa: E402
+
+check(mayorista("CITADEL_EQUITIES") == "Citadel"
+      and mayorista("HUDSON_RIVER_TRADING") == "Hudson River",
+      "el mayorista sale legible", f"{mayorista('CITADEL_EQUITIES')}")
+check(mayorista("CITADEL_EQUITIES_A") == "Citadel",
+      "y sin la letra del sub-destino, que no aporta nada")
+check(mayorista(None) is None and mayorista("") is None, "sin dato, celda vacia")
+check(describir("CDED") == ("Citadel", "Internalizada"),
+      "un MIC de mayorista = internalizada", f"{describir('CDED')}")
+check(describir("XNAS") == ("Nasdaq", "Mercado"),
+      "un MIC de bolsa = fue al mercado", f"{describir('XNAS')}")
+check(describir("INCR")[1] == "ATS", "y los mercados privados van aparte")
+check(describir("ZZZZ") == ("ZZZZ", None),
+      "un MIC que no conocemos se muestra tal cual y SIN clasificar "
+      "(mejor vacio que mal clasificado)", f"{describir('ZZZZ')}")
+check(describir(None) == (None, None) and describir("") == (None, None),
+      "sin dato, las dos celdas vacias")
+
+tas4 = object.__new__(TastytradeBroker)
+tas4._account = "5W"
+tas4._pedir = lambda *a, **k: {"data": {"items": [
+    # se la dieron a Citadel y Citadel SE LA QUEDO
+    {"transaction-type": "Trade", "action": "Buy to Open", "symbol": "AAA",
+     "quantity": "10", "price": "20", "executed-at": "2026-08-13T15:00:00Z",
+     "destination-venue": "CITADEL_EQUITIES", "exchange": "CDED"},
+    # se la dieron a Citadel y Citadel LA MANDO A NASDAQ
+    {"transaction-type": "Trade", "action": "Buy to Open", "symbol": "BBB",
+     "quantity": "10", "price": "20", "executed-at": "2026-08-13T15:01:00Z",
+     "destination-venue": "CITADEL_EQUITIES", "exchange": "XNAS"},
+]}, "pagination": {"total-pages": 1}}
+ruteo = {o["symbol"]: o for o in tas4.operaciones("2026-08-01", "2026-08-17")}
+check(ruteo["AAA"]["ruteada_a"] == "Citadel"
+      and ruteo["AAA"]["ejecutada_en"] == "Citadel"
+      and ruteo["AAA"]["tipo_ejecucion"] == "Internalizada",
+      "misma casa en las dos columnas = se la quedo",
+      f"{ruteo['AAA']['ruteada_a']} -> {ruteo['AAA']['ejecutada_en']}")
+check(ruteo["BBB"]["ruteada_a"] == "Citadel"
+      and ruteo["BBB"]["ejecutada_en"] == "Nasdaq"
+      and ruteo["BBB"]["tipo_ejecucion"] == "Mercado",
+      "distintas = se la dieron a uno y termino en otro lado",
+      f"{ruteo['BBB']['ruteada_a']} -> {ruteo['BBB']['ejecutada_en']}")
+check(all(o["ruteada_a"] == "Citadel" for o in ruteo.values()),
+      "las dos se las dieron al mismo: por eso 'siempre un mayorista' y "
+      "'algunas al mercado' no se contradicen")
+
+# los otros dos brokers no lo informan: columnas vacias, no inventadas
+check(a["ruteada_a"] is None and a["tipo_ejecucion"] is None,
+      "Alpaca no informa el ruteo: va vacio")
+check(ops_t["UTMD"]["ruteada_a"] is None,
+      "Tradier tampoco")
+
 print("\n=== 9. El reporte de ORDENES: lo que se pidio, se haya hecho o no ===")
 from tradingbot.core.historial import (                                # noqa: E402
     COLUMNAS_ORDENES,

@@ -292,6 +292,21 @@ permite UNA sola conexion de streaming de datos a la vez (con Algo Trader Plus, 
   distintos: aca estan todos.
   - Medido el 17/08/2026, 30 dias: **Alpaca 3.008** en 6,9 s (31 paginas de 100),
     **Tradier 3.526** en 1,6 s (una sola llamada), **Tastytrade 252** en 0,6 s.
+  - **A donde fue cada orden** (solo Tastytrade lo informa; en los otros dos las
+    columnas van vacias). Son **dos cosas distintas**:
+    - **Ruteada a** — a quien le dio Tasty la orden. Medido sobre 346 operaciones:
+      **siempre** un mayorista (Citadel, Hudson River, Susquehanna, Virtu, Jane
+      Street), **nunca** directo a una bolsa. Ese es su negocio: le vende el flujo.
+    - **Ejecutada en** — donde termino imprimiendo. Recien ahi el mayorista decide.
+    - **Internalizada o mercado** — el resumen de lo anterior. De esas 346, **286
+      se las quedo el mayorista (83%)** y **58 salieron a una bolsa (17%)**.
+  - Por eso una fila que dice *"Citadel -> Nasdaq"* es normal: se la dieron a
+    Citadel y Citadel la mando a Nasdaq. Y *"Citadel -> Citadel"* es que se la quedo.
+  - **En la cinta (TAS)**: lo internalizado imprime fuera de mercado y en la cinta
+    consolidada aparece con la letra **D** (FINRA ADF). Medido en vivo el
+    20/08/2026 con el feed de **Tradier**: de 446 prints, **el 46% eran D**. Con el
+    feed de **Tastytrade** no se ve ninguno: su streaming es **solo Nasdaq** (1.782
+    prints capturados, 100% Q).
 
 - **Ordenes** *(lo que se pidio, se haya hecho o no)*. Trae el estado final de cada
   una y se puede **filtrar**: Ejecutada, Ejecutada en parte, Cancelada, Rechazada,

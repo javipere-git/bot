@@ -251,6 +251,10 @@ class TradierBroker(Broker):
                 "comision": t.get("commission"),
                 "tasas": None,              # Tradier no las separa
                 "neto": e.get("amount"),
+                # Tradier tampoco informa el ruteo en su historial
+                "ruteada_a": None,
+                "ejecutada_en": None,
+                "tipo_ejecucion": None,
                 "order_id": None,           # el historial no lo trae
                 "id_ejecucion": None,
                 "notas": t.get("description"),

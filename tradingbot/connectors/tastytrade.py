@@ -600,8 +600,13 @@ class TastytradeBroker(Broker):
         calculado, el mercado donde se ejecuto y si abrio o cerro la posicion.
 
         El endpoint mezcla movimientos de plata (depositos, intereses) con las
-        operaciones; aca se devuelven SOLO las operaciones."""
+        operaciones; aca se devuelven SOLO las operaciones.
+
+        Es tambien el unico de los tres que dice A DONDE fue la orden: a que
+        mayorista se la dio Tasty y en que mercado termino imprimiendo. Los dos
+        datos vienen en esta misma respuesta, sin pedir nada aparte."""
         from ..core.historial import a_hora_ny
+        from ..core.venues import describir as _describir, mayorista
 
         filas = []
         for pagina in range(0, 200):        # 200 x 250 = 50.000, tope de seguridad
@@ -630,9 +635,14 @@ class TastytradeBroker(Broker):
                         for c in ("clearing-fees", "regulatory-fees",
                                   "proprietary-index-option-fees")), 4),
                     "neto": _con_signo(i, "net-value"),
+                    # Los dos campos del ruteo vienen en esta misma respuesta: no
+                    # hay que pedirle nada aparte a Tasty ni gastar otra llamada.
+                    "ruteada_a": mayorista(i.get("destination-venue")),
+                    "ejecutada_en": _describir(i.get("exchange"))[0],
+                    "tipo_ejecucion": _describir(i.get("exchange"))[1],
                     "order_id": i.get("order-id"),
                     "id_ejecucion": i.get("exec-id") or i.get("id"),
-                    "notas": i.get("destination-venue") or i.get("exchange"),
+                    "notas": None,
                 })
             if pagina + 1 >= js.get("pagination", {}).get("total-pages", 1):
                 break

@@ -371,6 +371,11 @@ class AlpacaBroker(Broker):
                     "comision": None,           # Alpaca no las informa aca
                     "tasas": None,
                     "neto": None,
+                    # Alpaca no informa a donde ruteo ni donde imprimio: las tres
+                    # columnas van vacias (un dato inventado seria peor que nada)
+                    "ruteada_a": None,
+                    "ejecutada_en": None,
+                    "tipo_ejecucion": None,
                     "order_id": a.get("order_id"),
                     "id_ejecucion": a.get("id"),
                     "notas": ("ejecucion parcial"

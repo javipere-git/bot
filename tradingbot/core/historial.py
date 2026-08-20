@@ -32,6 +32,11 @@ COLUMNAS = [
     ("comision", "Comision"),
     ("tasas", "Tasas"),
     ("neto", "Neto"),
+    # A donde fue la orden. Son DOS cosas distintas: a quien se la dio el broker,
+    # y donde termino imprimiendo. Ver core/venues.py.
+    ("ruteada_a", "Ruteada a"),
+    ("ejecutada_en", "Ejecutada en"),
+    ("tipo_ejecucion", "Internalizada o mercado"),
     ("order_id", "ID de la orden"),
     ("id_ejecucion", "ID de la ejecucion"),
     ("notas", "Notas"),
